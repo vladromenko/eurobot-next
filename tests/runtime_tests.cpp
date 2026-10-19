@@ -10,12 +10,32 @@ std::array<std::uint8_t, 8> last_spi{};
 std::array<std::array<std::uint8_t, 8>, 128> spi_trace{};
 std::array<std::int32_t, 3> measured{}, ticks{100, 200, 300};
 bool bus_fail{}, irq_enabled{true};
+bool primary_trace{}, primary_feedback_timeout{};
+std::uint16_t primary_position_raw{};
+std::array<std::array<std::uint8_t, 64>, 512> primary_packets{};
+std::array<std::size_t, 512> primary_packet_sizes{};
+unsigned primary_packet_count{}, primary_feedback_reads{};
 bool probe_mode{};
 unsigned probe_calls{}, probe_fail_at{}, probe_writes{};
 std::uint8_t probe_actual_id{98}, probe_torque{1}, probe_return_level{2};
 Error serial(void *, std::span<const std::uint8_t> tx, std::span<std::uint8_t> rx,
              std::size_t &received, std::uint32_t) {
   received = 0;
+  if (primary_trace) {
+    if (primary_packet_count < primary_packets.size()) {
+      std::copy(tx.begin(), tx.end(), primary_packets[primary_packet_count].begin());
+      primary_packet_sizes[primary_packet_count] = tx.size();
+    }
+    ++primary_packet_count;
+    if (tx[2] == 254 && tx[4] == 0x83 && tx[5] == 30 && tx[6] == 2 && tx[7] == 112) {
+      primary_position_raw = static_cast<std::uint16_t>(tx[8] | (tx[9] << 8));
+    }
+    if (tx[2] == 112 && tx[4] == 2 && tx[5] == 36) {
+      ++primary_feedback_reads;
+      if (primary_feedback_timeout)
+        return Error::timeout;
+    }
+  }
   if (probe_mode) {
     ++probe_calls;
     if (tx[4] != 2) {
@@ -65,6 +85,11 @@ Error serial(void *, std::span<const std::uint8_t> tx, std::span<std::uint8_t> r
     } else {
       return Error::malformed;
     }
+  }
+  if (primary_trace && tx[2] == 112 && tx[4] == 2 && tx[5] == 36 && count == 11) {
+    rx[5] = static_cast<std::uint8_t>(primary_position_raw);
+    rx[6] = static_cast<std::uint8_t>(primary_position_raw >> 8);
+    rx[15] = 0; // Actual Moving flag is clear in this successful feedback packet.
   }
   unsigned sum = 0;
   for (unsigned i = 2; i < 5U + count; ++i)
@@ -186,7 +211,114 @@ Error actuate(Hardware &h, std::uint8_t kind, std::uint8_t id, float value, floa
   wire::write_f32(bytes.data() + 6, rate);
   return Hardware::actuator(&h, bytes, now);
 }
+void source_primary_runtime_wire() {
+  for (unsigned scenario = 0; scenario < 3; ++scenario) {
+    // 0: measured completion;1: feedback timeout;2: ESTOP while running.
+    auto config = deployment();
+    config.grippers[0] = gripper::legacy_2026_reference(0);
+    config.grippers[0].reviewed = true;
+    config.ax_ids[112] = true;
+    config.servo_max_deg[112] = 300;
+    Hardware hardware{config};
+    PumpBank pumps{{8, 8, 250, 0}, {&hardware, Hardware::write_outputs}};
+    Chassis chassis{config.chassis, {&hardware, Hardware::write_wheels}};
+    Controller controller{pumps, chassis, {&hardware, Hardware::stop_hook}};
+    gripper::Engine engine{config.grippers,
+                           {&hardware, Hardware::job_guard, Hardware::job_validate,
+                            Hardware::job_issue, Hardware::job_feedback, Hardware::job_stop}};
+    hardware.pumps = &pumps;
+    hardware.chassis = &chassis;
+    hardware.controller = &controller;
+    hardware.gripper_engine = &engine;
+    CHECK(hardware.initialize() == Error::ok);
+    CHECK(controller.initialize(0) == Error::ok);
+    CHECK(controller.claim(77, 1, 1000, 0) == Error::ok);
+    CHECK(controller.rearm(77, 2, 0) == Error::ok);
+    wire::Dispatcher dispatcher{controller,
+                                {&hardware, Hardware::actuator, Hardware::sensor_read,
+                                 Hardware::job_request, Hardware::command_guard}};
+    fake::primary_trace = true;
+    fake::primary_feedback_timeout = scenario == 1;
+    fake::primary_packet_count = fake::primary_feedback_reads = 0;
+    wire::Frame request{};
+    request.type = 0x21;
+    request.owner = 77;
+    request.sequence = 3;
+    request.length = 22;
+    request.payload[1] = static_cast<std::uint8_t>(gripper::Operation::rotate_main);
+    wire::write_u32(request.payload.data() + 10, 1000);
+    auto reply = dispatcher.dispatch(request, 0);
+    CHECK(reply.length == 25 && reply.payload[0] == 0 && engine.busy());
+    hardware.job_tick(0);
+    if (scenario != 1)
+      CHECK(engine.busy() && hardware.servo_deadlines[112].active);
+    const auto packets_after_issue = fake::primary_packet_count;
+    CHECK(dispatcher.dispatch(request, 0).payload[0] ==
+          static_cast<unsigned>(Error::stale_sequence));
+    CHECK(fake::primary_packet_count == packets_after_issue); // No duplicate sync-write.
+    if (scenario == 2) {
+      request.type = static_cast<std::uint8_t>(wire::Type::estop);
+      request.sequence = 4;
+      request.length = 0;
+      CHECK(dispatcher.dispatch(request, 10).payload[0] == 0);
+      CHECK(controller.state().estop && !controller.state().armed && !engine.busy());
+      CHECK(engine.state().phase == gripper::Phase::faulted);
+      CHECK(engine.state().error == Error::estop && engine.state().measured_steps == 0);
+    } else if (scenario == 0) {
+      for (unsigned now = 10; now <= 200; now += 10) {
+        CHECK(controller.tick(now) == Error::ok);
+        hardware.job_tick(now);
+      }
+      CHECK(fake::primary_feedback_reads >= 1);
+      if (scenario == 0) {
+        CHECK(engine.state().phase == gripper::Phase::completed);
+        CHECK(engine.state().measured_steps == 1 && engine.state().count == 1);
+      }
+    } else {
+      CHECK(fake::primary_feedback_reads == 1);
+      CHECK(engine.state().phase == gripper::Phase::faulted);
+      CHECK(engine.state().error == Error::timeout && engine.state().measured_steps == 0);
+      CHECK(!controller.state().armed && controller.state().fault);
+    }
+    request.type = 0x22;
+    request.sequence = 5;
+    request.length = 4;
+    wire::write_u32(request.payload.data(), hardware.job_id);
+    reply = dispatcher.dispatch(request, scenario == 0 ? 200 : (scenario == 2 ? 10 : 0));
+    CHECK(reply.type == 0xa2 && reply.length == 25 && reply.payload[0] == 0);
+    CHECK(reply.payload[1] == static_cast<unsigned>(scenario == 0 ? gripper::Phase::completed
+                                                                  : gripper::Phase::faulted));
+    CHECK(reply.payload[10] == (scenario == 0 ? 1 : 0));
+    CHECK(reply.payload[11] ==
+          static_cast<unsigned>(scenario == 0 ? Error::ok
+                                              : (scenario == 1 ? Error::timeout : Error::estop)));
+    unsigned sync_packets = 0;
+    CHECK(fake::primary_packet_count < fake::primary_packets.size());
+    for (unsigned i = 0; i < fake::primary_packet_count; ++i) {
+      const auto &packet = fake::primary_packets[i];
+      const auto size = fake::primary_packet_sizes[i];
+      unsigned checksum = 0;
+      for (std::size_t at = 2; at < size; ++at)
+        checksum += packet[at];
+      CHECK((checksum & 255U) == 255U);
+      CHECK(packet[2] != 254 || packet[4] == 0x83); // Never an ordinary broadcast read/write.
+      if (packet[4] == 0x83) {
+        ++sync_packets;
+        CHECK(packet[2] == 254 && packet[7] == 112); // Broadcast outer packet, one real inner ID.
+        CHECK(size == (packet[6] == 1 ? 10U : 11U));
+        if (packet[5] == 30) {
+          CHECK(packet[8] == 222 && packet[9] == 0); // Source65deg at AX1023/300 units.
+        }
+      }
+      if (packet[4] == 2 && packet[5] == 36)
+        CHECK(packet[2] == 112);
+    }
+    CHECK(sync_packets == 3); // speed, position and torque; each contains ONLY ID112.
+    fake::primary_trace = fake::primary_feedback_timeout = false;
+  }
+}
 int main() {
+  source_primary_runtime_wire();
   Deployment invalid{};
   Hardware uncommissioned{invalid};
   CHECK(uncommissioned.initialize() == Error::invalid_config);

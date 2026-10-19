@@ -14,7 +14,7 @@ inline eurobot::board::Deployment make_deployment() {
   // config.grippers[0] = eurobot::gripper::legacy_2026_reference(0);
   // config.grippers[1] = eurobot::gripper::legacy_2026_reference(1);
   // Bind pump_channels/valve_channels to logical PumpBank indexes (not physical outputs).
-  // Primary main servo ID254 is broadcast in legacy, deliberately left UNASSIGNED here.
+  // Source primary main selects112 only; former254 slot is UNASSIGNED and inactive.
   // Configure real lift bounds/speed, servo allowlists, PCA calibration and safe currents.
   // For capture/release select Composite::base_strategy_2026 and explicit chassis speeds/
   // durations; old HL SimpleMove payload does not provide usable matched STM parameters.

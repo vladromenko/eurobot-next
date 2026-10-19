@@ -138,7 +138,7 @@ tools/verify.sh \
 python3 tools/board_test.py --port /dev/cu.usbserial-YOUR_ADAPTER
 ```
 
-Дальнейшие шаги, параметры и пример явно разрешённого упражнения: [MACOS_BOARD_TEST.md](MACOS_BOARD_TEST.md). Default client только status+sensors, без claim/arm/движения. Проверка механизмов требует отдельного подготовленного стенда и известного профиля; ID254, допустимые токи и реальные пределы не исправляются догадкой. Для новой разводки8+8 все routes уже заданы в examples/board_8_pumps.hpp; сверить исполнение по BOARD_WIRING.
+Дальнейшие шаги, параметры и пример явно разрешённого упражнения: [MACOS_BOARD_TEST.md](MACOS_BOARD_TEST.md). Default client только status+sensors, без claim/arm/движения. Проверка механизмов требует отдельного подготовленного стенда и известного профиля; main0 уже настроен на112; допустимые токи и реальные пределы сверяются на стенде. Для новой разводки8+8 все routes уже заданы в examples/board_8_pumps.hpp; сверить исполнение по BOARD_WIRING.
 
 ## При ошибке
 

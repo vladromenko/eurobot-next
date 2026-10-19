@@ -2,7 +2,7 @@
 
 Для этой платы подготовлен заполненный source-профиль2026 и единый установщик: [ROBOT_2026_PROFILE.md](ROBOT_2026_PROFILE.md). Команда `python3 tools/install_robot.py flash` собирает его и выполняет backup/write/readback после подключения ST-LINK. Шаблон deployment вручную заполнять не требуется. Нижеприведённые команды общего `flash.sh` относятся к явно выбранному образу; без `--image` его default — диагностический Debug, а не рабочий source-профиль.
 
-**Текущая программная редакция собрана и проверена.** Host, ASan/UBSan и host C++26: по73/73 CTest; STM32 debug/release/C++26 ELF/HEX/BIN и ROS2 Jazzy/Lyrical colcon build/test — PASS. Подробности и журналы: TESTING/VALIDATION_REPORT. Это не аппаратная приёмка и не разрешение вооружать default deployment. После изменения исходников, deployment, компилятора или пути проекта нужен свежий configure/build и согласованный manifest. Результаты34/34 и ранее сохранённые образы относятся к историческому срезу, а не автоматически к новой прошивке. Физическая загрузка владельцем — отдельный последующий шаг.
+**Текущая программная редакция собрана и проверена.** Host, ASan/UBSan и host C++26: по81/81 CTest; STM32 debug/release/C++26 ELF/HEX/BIN и ROS2 Jazzy/Lyrical colcon build/test — PASS. Подробности и журналы: TESTING/VALIDATION_REPORT. Это не аппаратная приёмка и не разрешение вооружать default deployment. После изменения исходников, deployment, компилятора или пути проекта нужен свежий configure/build и согласованный manifest. Результаты34/34 и ранее сохранённые образы относятся к историческому срезу, а не автоматически к новой прошивке. Физическая загрузка владельцем — отдельный последующий шаг.
 
 Финальная прошивка 2026 определяет захваты и команды. Версия 2025 служит базой/историей; она не заменяет поведение, присутствующее в 2026. См. [сравнение](COMPARISON_2025_2026_NEXT.md), [сценарии](GRIPPER_SCENARIOS.md).
 
@@ -129,9 +129,9 @@ tools/dependencies.sh
 
 ### Baseline из финального 2026 и неизвестные величины
 
-Подтверждено **кодом**: STM32F407VG; HSE16MHz; targetSYSCLK168MHz; SPI24bits/20poweroutputs; USART1 новойпрошивки 115200; Maxon IDs0x22,0x21,0x23; L0.1217m,r0.0295m,gear28,ticks4096. Только 4 различных pumps1/3/5/7 и valves2/4/6/8, оба legacy gripper разделяютих. Cursor98,pinion13; mainID254 остаётся заблокированным. Подробные angles/channels: [GRIPPER_SCENARIOS.md](GRIPPER_SCENARIOS.md).
+Подтверждено **кодом**: STM32F407VG; HSE16MHz; targetSYSCLK168MHz; SPI24bits/20poweroutputs; USART1 новойпрошивки 115200; Maxon IDs0x22,0x21,0x23; L0.1217m,r0.0295m,gear28,ticks4096. Только 4 различных pumps1/3/5/7 и valves2/4/6/8, оба legacy gripper разделяютих. Cursor98,pinion13; primarymain112, reservemain1/2. Старый слот254 неактивен; все main0-рецепты реализованы с feedback112. Подробные angles/channels: [GRIPPER_SCENARIOS.md](GRIPPER_SCENARIOS.md).
 
-Неизвестны реальные motor current/PSUbudget/valvepolarity, исполнение новой разводки PO1…PO16 и физическая связь USART3/DIO, точные servoIDs вместо 254, физические limits/ход/знаки, homingpolarity/travel, payload удержание при disable, worst-case latency/WCET. Ни одно поле нельзя заполнять случайным тестовым числом. При текущем 20outputbackend32logicalchannels не означают 32 физических насоса с 32 клапанами; понадобится подтверждённое расширение электроники.
+Неизвестны реальные motor current/PSUbudget/valvepolarity, исполнение новой разводки PO1…PO16 и физическая связь USART3/DIO, соответствие установленных servoIDs исходной карте, физические limits/ход/знаки, homingpolarity/travel, payload удержание при disable, worst-case latency/WCET. Ни одно поле нельзя заполнять случайным тестовым числом. При текущем 20outputbackend32logicalchannels не означают 32 физических насоса с 32 клапанами; понадобится подтверждённое расширение электроники.
 
 ## 6. Последующая ручная сборка и тесты
 
@@ -177,7 +177,7 @@ colcon test-result --verbose
 
 Запуск bridge открывает serial и запрашивает status; это уже доступ к устройству, не часть установки. Параметры serial/baud115200 проверяются перед отдельным разрешённым запуском. Никакого auto-arm/replay после reconnect.
 
-Новый профиль дополнительно содержит `grippers[2]` типа `gripper::Config`. Factory `legacy_2026_reference(index)` заполняет только подтверждённые source facts и оставляет `reviewed=false`, неизвестный main ID и pump/valve mapping не назначенными. Настраиваются main/side/cursor/pinion bindings и limits, block/shift PCA indices, logical PumpBank indexes, raw speeds, angle tolerance, lift stepper/steps-per-mm/speed/current/bounds, phase/operation timeouts, `disable_lift_after_move`, `drive_reference` и composite selection. Для `Composite::base_strategy_2026` обязательны `capture_axis`, явные forward/backward speeds и durations: устаревший HL payload их не даёт. `reviewed=true` относится к выбранному механическому профилю; `commissioned=true` — к общей плате.
+Новый профиль дополнительно содержит `grippers[2]` типа `gripper::Config`. Factory `legacy_2026_reference(index)` заполняет только подтверждённые source facts и оставляет `reviewed=false` и pump/valve mapping не назначенным. Primary main выбирает112 маской2; бывший слот254 неактивен. Настраиваются main/side/cursor/pinion bindings, main_active_mask и limits, block/shift PCA indices, logical PumpBank indexes, raw speeds, angle tolerance, lift stepper/steps-per-mm/speed/current/bounds, phase/operation timeouts, `disable_lift_after_move`, `drive_reference` и composite selection. Для `Composite::base_strategy_2026` обязательны `capture_axis`, явные forward/backward speeds и durations: устаревший HL payload их не даёт. `reviewed=true` относится к выбранному механическому профилю; `commissioned=true` — к общей плате.
 
 ## 7. Загрузка — отдельный этап владельца
 

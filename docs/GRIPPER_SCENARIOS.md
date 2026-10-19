@@ -36,7 +36,7 @@ USART3, верхний AX ID103, нижний ID102 (`01_FIRMWARE_2025/SOURCE/Co
 | Pump outputs |1,3,5,7|**те же 1,3,5,7**|
 | Valve outputs |2,4,6,8|**те же 2,4,6,8**|
 
-ID254 — broadcast Dynamixel; индивидуальный реальный адрес не подтверждён. Нельзя подставлять вымышленный ID или разрешать движение broadcast. Два logical gripper используют четыре общих физических насоса: восемь независимых маршрутов не доказаны. Профиль должен явно описывать совместное использование либо подтверждённую независимую проводку.
+Таблица выше показывает старые поля. В новом source-профиле primary main_active_mask=2: активен только112, слот254 неактивен. Main0 и все использующие его составные рецепты доступны; завершение проверяет положение112. Резервный main_active_mask=3 сохраняет1/2. [Разбор старого поведения](PRIMARY_GRIPPER_254.md). Два logical gripper используют четыре общих физических насоса: восемь независимых маршрутов не доказаны. Профиль должен явно описывать совместное использование либо подтверждённую независимую проводку.
 
 Cursor ID98, speed600, horizontal198°, vertical80° (`gripper_task.c:187`). Pinion ID13, start148°, speed800,3.979°/мм (`:193`,`:82`). PCA address0x40. В legacy enum `Core/Lib/Include/pca9685.h:58` CH0=0 и CH1=1: значения профиля 1…12 уже являются индексами PCA, их нельзя дополнительно уменьшать на 1. Lift stepper1:25steps/мм, normal1100mA, down320mA (`:79`).
 
@@ -120,7 +120,7 @@ Default `trees/base_strategy.xml:69` Load: SideOff→300ms→GripOn→300→Side
 
 `firmware/include/eurobot/gripper.hpp` и `firmware/src/gripper.cpp` задают ограниченный Engine, максимум64 фазы. `runtime.cpp` связывает его с настоящими драйверами и отдельными guard/validate/issue/feedback/stop callbacks. Все микросценарии case0…13 представлены; capture/release используют явно выбранный `Composite::base_strategy_2026`, prepare вызывается только командой. Исторические операции2025 доступны отдельно. Поведение2026 является основным.
 
-Factory `legacy_2026_reference` сохраняет source angles, AX IDs, PCA indices и единицы. `reviewed=false`; main ID254 заменён на unassigned, а не на вымышленный ID. Логические pump/valve routes и неизвестные lift/motion limits не назначаются автоматически. В deployment нужны общие allowlists и два отдельных reviewed gripper config. PCA CH1=1, уже готовый индекс: вычитать1 нельзя.
+Factory `legacy_2026_reference` сохраняет source angles, AX IDs, PCA indices и единицы. `reviewed=false`; бывший main ID254 заменён на unassigned и выключен маской2; активный112 сохранён. Отсутствие второго индивидуального адреса не блокирует main0. Логические pump/valve routes и неизвестные lift/motion limits не назначаются автоматически. В deployment нужны общие allowlists и два отдельных reviewed gripper config. PCA CH1=1, уже готовый индекс: вычитать1 нельзя.
 
 Парные AX теперь проверяют оба feedback и moving/error, вместо первого привода с игнорируемой ошибкой. Lift использует точные referenced steps; software counter не объявляется измеренным положением. Удержание/disable задаётся проверенной политикой, поскольку отключение тока может потерять reference и уронить груз. Slide вычисляется с float precision и отвергает выход за reviewed bounds вместо молчаливого clamp. Timed движение использует явные SI speed/axis/duration; старые aliases и ошибки единиц не сохраняются. Relative движение исправляет знак после overshoot и использует фактический dt. Wheel calibration считает относительную encoder delta без разрушительного сброса внешних totals.
 

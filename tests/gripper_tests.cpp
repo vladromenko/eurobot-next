@@ -115,6 +115,7 @@ void source_profiles_and_rejection() {
   CHECK(!primary.reviewed && !reserve.reviewed);
   CHECK(primary.main[0].id == grip::unassigned);
   CHECK(primary.main[1].id == 112);
+  CHECK(primary.main_active_mask == 2 && reserve.main_active_mask == 3);
   CHECK(primary.side[0].id == 7 && primary.side[1].id == 8);
   CHECK(reserve.main[0].id == 1 && reserve.main[1].id == 2);
   CHECK(primary.block_channels == (std::array<std::uint8_t, 4>{1, 2, 3, 4}));
@@ -130,6 +131,12 @@ void source_profiles_and_rejection() {
   grip::Engine disabled{std::span<const grip::Config>{&reserve, 1}, fake.sinks()};
   CHECK(disabled.start(42, {grip::Operation::cursor, 0, 1, 0, 10000}, 0) == Error::invalid_config);
   primary.reviewed = true;
+  grip::Engine single_main{std::span<const grip::Config>{&primary, 1}, fake.sinks()};
+  CHECK(single_main.start(42, {grip::Operation::rotate_main, 0, 1, 0, 10000}, 0) == Error::ok);
+  CHECK(single_main.plan()[0].count == 1);
+  CHECK(single_main.plan()[0].targets[0].id == 112);
+  CHECK(fake.issue_count == 0);
+  primary.main_active_mask = 3; // An explicitly active unknown slot must still fail.
   grip::Engine unsafe_id{std::span<const grip::Config>{&primary, 1}, fake.sinks()};
   CHECK(unsafe_id.start(42, {grip::Operation::rotate_main, 0, 1, 0, 10000}, 0) ==
         Error::invalid_config);

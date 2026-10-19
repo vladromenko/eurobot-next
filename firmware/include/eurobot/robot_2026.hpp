@@ -63,16 +63,17 @@ namespace eurobot::board {
     grip.capture_backward_ms = 2500;
   }
   // Never infer a physical role from a spare ID or emit legacy broadcast254.
-  // A discovered, individually identified primary can be supplied explicitly.
+  // The source-addressed primary group is complete with112 alone.
+  // An additional, physically identified main motor can be supplied explicitly.
   if (primary_main_id > 0 && primary_main_id < 254 && !config.ax_ids[primary_main_id] &&
       !config.mx_ids[primary_main_id]) {
+    config.grippers[0].main_active_mask = 0x03;
     config.grippers[0].main[0] = {gripper::Device::ax, primary_main_id, 0, 300};
     config.ax_ids[primary_main_id] = true;
     config.servo_min_deg[primary_main_id] = 0;
     config.servo_max_deg[primary_main_id] = 300;
   }
-  // Main0 recipes with the unresolved binding reject before any output. Other
-  // known devices and the independent reserve gripper remain usable.
+  // Default main0 recipes address and verify112, never the inactive source254 slot.
   return config;
 }
 } // namespace eurobot::board

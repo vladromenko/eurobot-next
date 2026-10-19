@@ -116,6 +116,10 @@ class InstallationTests(unittest.TestCase):
             self.assertEqual(chosen[0], later[0])
             self.assertIn('-DEUROBOT_BOARD_CONFIG=' + str(saved), later[0])
 
+    def test_additional_motor_option_alias_preserves_existing_cli(self):
+        self.assertEqual(installer.arguments(['--additional-main-servo-id', '42']).primary_servo_id, 42)
+        self.assertEqual(installer.arguments(['--primary-servo-id', '42']).primary_servo_id, 42)
+
     def test_invalid_and_already_assigned_primary_ids_rejected(self):
         for value in (0, 254, 255, -1, *sorted(installer.KNOWN_IDS)):
             with self.subTest(primary=value), redirect_stderr(io.StringIO()):
@@ -146,8 +150,15 @@ class InventoryTests(unittest.TestCase):
         self.assertEqual(report['devices'][0]['source_role'], 'primary_side1')
         self.assertIsNone(report['devices'][1]['source_role'])
         self.assertEqual(report['devices'][1]['model_number'], 29)
-        self.assertIsNone(report['primary_main_id'])
+        self.assertEqual(report['source_primary_main_id'], 112)
+        self.assertFalse(report['primary_main_responded'])
         self.assertEqual([opcode for opcode, _ in client.calls], [8, 0x24, 0x24, 0x24])
+
+    def test_primary_response_is_evidence_separate_from_source_binding(self):
+        report = inventory.collect(FakeClient({112: probe(112)}), [112])
+        self.assertEqual(report['source_primary_main_id'], 112)
+        self.assertTrue(report['primary_main_responded'])
+        self.assertEqual(report['devices'][0]['source_role'], 'primary_main')
 
     def test_armed_leased_or_old_owned_controller_rejected_before_probe(self):
         for flags, owner in ((1, 0), (4, 0), (0, 77), (5, 77)):

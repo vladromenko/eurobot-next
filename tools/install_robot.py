@@ -13,14 +13,14 @@ KNOWN_IDS = frozenset((1, 2, 7, 8, 13, 16, 25, 98, 112))
 def arguments(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action', nargs='?', choices=('build', 'flash'), default='build')
-    parser.add_argument('--primary-servo-id', type=int,
-                        help='Individually identified primary AX ID; never inferred from a spare device')
+    parser.add_argument('--additional-main-servo-id', '--primary-servo-id', dest='primary_servo_id', type=int,
+                        help='Optional additional main AX ID; default primary already works on112 alone')
     parser.add_argument('--stlink-sn')
     parser.add_argument('--programmer')
     args = parser.parse_args(argv)
     if args.primary_servo_id is not None and (
             not 1 <= args.primary_servo_id <= 253 or args.primary_servo_id in KNOWN_IDS):
-        parser.error('Primary ID must be1..253 and distinct from existing2026 roles; broadcast254 forbidden')
+        parser.error('Additional main ID must be1..253 and distinct from existing2026 roles; broadcast254 forbidden')
     return args
 
 

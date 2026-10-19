@@ -101,7 +101,7 @@ python3 tools/board_test.py --port /dev/cu.usbserial-YOUR_ADAPTER \
 |35 stepper_set_parameter|disarmed|channel0…3; argument известный register, secondary value; mask/writable validation, reference становится неизвестным|
 |36 servo_probe|read, idle bus|channel=unicast1…253, три чтения identity/torque/position; без allowlist и writes|
 
-Клиент не предоставляет произвольную строку CLI, чужой serial instruction или произвольный адрес памяти. L6474 register interface ограничен таблицей известных параметров, read-only fields защищены. ID254 в legacy main profile остаётся не назначенным до проверки. Пределы и pins не меняются в обход deployment validation.
+Клиент не предоставляет произвольную строку CLI, чужой serial instruction или произвольный адрес памяти. L6474 register interface ограничен таблицей известных параметров, read-only fields защищены. Main0 использует112; бывший слот254 неактивен, его поиск не требуется для выполнения рецептов. Пределы и pins не меняются в обход deployment validation.
 
 ## Обнаружение неизвестного Dynamixel: только чтение
 

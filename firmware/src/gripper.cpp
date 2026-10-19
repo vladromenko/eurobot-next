@@ -146,9 +146,12 @@ Config legacy_2026_reference(std::uint8_t index) noexcept {
   if (index > 1) {
     return config;
   }
-  // Legacy primary main_1=254 is broadcast: deliberately leave it unassigned.
+  // Final source SyncWrite lists {254,112}; only112 is an individual target.
+  // Same Git change moved98 from main_1 to cursor. Explicitly disable the old
+  // non-unicast slot, without inventing a second motor ID or broadcasting writes.
   config.main = index == 0 ? std::array<ServoBinding, 2>{ax(unassigned), ax(112)}
                            : std::array<ServoBinding, 2>{ax(1), ax(2)};
+  config.main_active_mask = index == 0 ? 0x02 : 0x03;
   config.side = index == 0 ? std::array<ServoBinding, 2>{ax(7), ax(8)}
                            : std::array<ServoBinding, 2>{ax(16), ax(25)};
   config.cursor = ax(98);
@@ -259,11 +262,25 @@ Error Engine::make_plan(Request request) noexcept {
     }
     add(step);
   };
-  const auto main = [&servos, &config](float state, std::uint32_t settling) {
+  const auto main_servos = [&servos, &config, &result](float angle, std::uint32_t settling) {
+    if (config.main_active_mask == 0 || (config.main_active_mask & ~0x03U) != 0) {
+      result = Error::invalid_config;
+      return;
+    }
+    std::array<ServoBinding, 2> selected{};
+    const std::array<float, 2> angles{angle, angle};
+    std::size_t count = 0;
+    for (std::size_t i = 0; i < config.main.size(); ++i) {
+      if ((config.main_active_mask & (1U << i)) != 0)
+        selected[count++] = config.main[i];
+    }
+    servos(std::span{selected}.first(count), std::span{angles}.first(count), config.main_speed_raw,
+           settling);
+  };
+  const auto main = [&main_servos, &config](float state, std::uint32_t settling) {
     const auto angle = state == 0 ? config.main_up_deg
                                   : (state == 1 ? config.main_down_deg : config.main_cursor_deg);
-    const std::array<float, 2> angles{angle, angle};
-    servos(config.main, angles, config.main_speed_raw, settling);
+    main_servos(angle, settling);
   };
   const auto side = [&servos, &config](bool closed, std::uint32_t settling) {
     servos(config.side, closed ? config.side_closed_deg : config.side_open_deg,
@@ -519,13 +536,11 @@ Error Engine::make_plan(Request request) noexcept {
   case Operation::legacy_2025_cycle: {
     if (request.operation == Operation::legacy_2025_cycle) {
       for (const auto angle : {100.0F, 50.0F}) {
-        const std::array<float, 2> angles{angle, angle};
-        servos(config.main, angles, config.main_speed_raw, 0);
+        main_servos(angle, 0);
         pause(1000);
       }
     }
-    const std::array<float, 2> angles{0, 0};
-    servos(config.main, angles, config.main_speed_raw, 0);
+    main_servos(0, 0);
     break;
   }
   case Operation::capture:

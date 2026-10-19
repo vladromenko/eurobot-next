@@ -37,7 +37,7 @@ inline constexpr std::uint32_t source_match_duration_ms = 99000;
     grip.reviewed = false;
     grip.pump_channels = {0, 1, 2, 3};
     grip.valve_channels = {0, 1, 2, 3};
-    // Factory already leaves ambiguous ID254 UNASSIGNED, not replaced with a guessed ID.
+    // Factory selects112 only (mask2); former254 slot is UNASSIGNED and inactive.
     // Source models/IDs/protocol ranges, PCA calibration, lift speed and disable
     // behaviour are now filled. Verify physical travel, current suitability and
     // the remaining primary identity before activation.

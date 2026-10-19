@@ -66,7 +66,7 @@ TEST(Robot2026, ReviewedProfileDoesNotArmControllerOrEnergizeBootOutputs) {
   EXPECT_EQ(io.pumps, 0U);
 }
 
-TEST(Robot2026, CompleteSourceConfigurationValidatesWithoutFabricatingPrimaryIdentity) {
+TEST(Robot2026, CompleteSourceConfigurationUsesOnlySupportedPrimaryTarget112) {
   const auto reference = eurobot::source_2026::reference();
   EXPECT_EQ(reference.grippers[0].lift_speed_steps_s, 1920);
   EXPECT_TRUE(reference.grippers[0].disable_lift_after_move);
@@ -265,46 +265,51 @@ TEST(Robot2026, DerivedWheelAndEncoderBoundsCoverSelectedSourceBodyEnvelope) {
   EXPECT_EQ(p.chassis.max_encoder_delta, expected);
 }
 
-TEST(Robot2026, PrimaryIdRequiresUniqueExplicitUnicastAndNeverUsesBroadcast) {
+TEST(Robot2026, OptionalAdditionalMainIdRequiresUniqueExplicitUnicast) {
   for (const auto id : {0U, 1U, 2U, 7U, 8U, 13U, 16U, 25U, 98U, 112U, 254U, 255U}) {
     const auto p = board::robot_2026(static_cast<std::uint8_t>(id));
     EXPECT_EQ(p.grippers[0].main[0].id, grip::unassigned);
+    EXPECT_EQ(p.grippers[0].main_active_mask, 2);
     EXPECT_TRUE(p.valid());
   }
   const auto explicit_id = board::robot_2026(42);
   EXPECT_EQ(explicit_id.grippers[0].main[0].id, 42);
+  EXPECT_EQ(explicit_id.grippers[0].main_active_mask, 3);
   EXPECT_TRUE(explicit_id.ax_ids[42]);
   EXPECT_EQ(explicit_id.servo_min_deg[42], 0);
   EXPECT_EQ(explicit_id.servo_max_deg[42], 300);
   EXPECT_TRUE(explicit_id.valid());
 }
 
-TEST(Robot2026, UnknownPrimaryRejectsBeforeIssueWhileKnownGripperOperationsStillExecute) {
+TEST(Robot2026, SinglePrimary112AndKnownGripperOperationsExecute) {
   const auto p = board::robot_2026();
   PlanIo io;
   grip::Engine engine{p.grippers, io.sinks()};
-  EXPECT_EQ(engine.start(77, {grip::Operation::rotate_main, 0, 1, 0, 10000}, 0),
-            Error::invalid_config);
+  ASSERT_EQ(engine.start(77, {grip::Operation::rotate_main, 0, 1, 0, 10000}, 0), Error::ok);
   EXPECT_EQ(io.writes, 0U);
-  EXPECT_FALSE(engine.busy());
-  ASSERT_EQ(engine.start(77, {grip::Operation::rotate_main, 1, 1, 0, 10000}, 0), Error::ok);
   ASSERT_EQ(engine.tick(0), Error::ok);
-  EXPECT_EQ(io.last.targets[0].id, 1);
-  EXPECT_EQ(io.last.targets[1].id, 2);
+  EXPECT_EQ(io.last.count, 1);
+  EXPECT_EQ(io.last.targets[0].id, 112);
   ASSERT_EQ(engine.tick(200), Error::ok);
   EXPECT_EQ(engine.state().phase, grip::Phase::completed);
-  ASSERT_EQ(engine.start(77, {grip::Operation::side_grips, 0, 0, 0, 10000}, 300), Error::ok);
+  ASSERT_EQ(engine.start(77, {grip::Operation::rotate_main, 1, 1, 0, 10000}, 300), Error::ok);
   ASSERT_EQ(engine.tick(300), Error::ok);
+  EXPECT_EQ(io.last.targets[0].id, 1);
+  EXPECT_EQ(io.last.targets[1].id, 2);
+  ASSERT_EQ(engine.tick(500), Error::ok);
+  EXPECT_EQ(engine.state().phase, grip::Phase::completed);
+  ASSERT_EQ(engine.start(77, {grip::Operation::side_grips, 0, 0, 0, 10000}, 600), Error::ok);
+  ASSERT_EQ(engine.tick(600), Error::ok);
   EXPECT_EQ(io.last.targets[0].id, 7);
   EXPECT_EQ(io.last.targets[1].id, 8);
-  ASSERT_EQ(engine.tick(400), Error::ok);
-  ASSERT_EQ(engine.start(77, {grip::Operation::pumps, 1, 0, 15, 10000}, 500), Error::ok);
-  ASSERT_EQ(engine.tick(500), Error::ok);
+  ASSERT_EQ(engine.tick(700), Error::ok);
+  ASSERT_EQ(engine.start(77, {grip::Operation::pumps, 1, 0, 15, 10000}, 800), Error::ok);
+  ASSERT_EQ(engine.tick(800), Error::ok);
   EXPECT_EQ(io.last.pump_select, 0xf0U);
   EXPECT_EQ(io.last.pump_values, 0xf0U);
-  ASSERT_EQ(engine.tick(550), Error::ok);
+  ASSERT_EQ(engine.tick(850), Error::ok);
   EXPECT_EQ(engine.state().phase, grip::Phase::completed);
   io.authority = Error::not_armed;
-  EXPECT_EQ(engine.start(77, {grip::Operation::cursor, 0, 1, 0, 10000}, 600), Error::not_armed);
+  EXPECT_EQ(engine.start(77, {grip::Operation::cursor, 0, 1, 0, 10000}, 900), Error::not_armed);
 }
 } // namespace

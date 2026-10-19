@@ -11,7 +11,7 @@ import board_test as board
 
 KNOWN_ROLES = {1: 'reserve_main1', 2: 'reserve_main2', 7: 'primary_side1',
                8: 'primary_side2', 13: 'pinion', 16: 'reserve_side1',
-               25: 'reserve_side2', 98: 'cursor', 112: 'primary_main2'}
+               25: 'reserve_side2', 98: 'cursor', 112: 'primary_main'}
 
 
 def collect(client, ids):
@@ -34,8 +34,9 @@ def collect(client, ids):
             result['source_role'] = KNOWN_ROLES.get(device_id)
             devices.append(result)
     return {'read_only': True, 'devices': devices, 'no_response_ids': missing,
-            'primary_main_id': None,
-            'note': 'Unassigned devices are candidates, not proof of their mechanical role. ID254 is never queried.'}
+            'source_primary_main_id': 112,
+            'primary_main_responded': any(device['actual_id'] == 112 for device in devices),
+            'note': 'Source primary target is112. Other devices are not automatically assigned. ID254 is never queried.'}
 
 
 def main(argv=None):

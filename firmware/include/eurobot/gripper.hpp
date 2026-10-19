@@ -86,6 +86,9 @@ enum class Composite : std::uint8_t { disabled, base_strategy_2026 };
 struct Config {
   bool reviewed{};
   std::array<ServoBinding, 2> main{}, side{};
+  // Select physical main targets explicitly. Inactive slots are never transmitted/read.
+  // An invalid ACTIVE binding is an error, not an implicit optional motor.
+  std::uint8_t main_active_mask{0x03};
   ServoBinding cursor{}, pinion{};
   std::array<std::uint8_t, 4> pump_channels{unassigned, unassigned, unassigned, unassigned};
   std::array<std::uint8_t, 4> valve_channels{unassigned, unassigned, unassigned, unassigned};

@@ -39,8 +39,8 @@ inline void apply_known_parameters(Deployment &config) noexcept {
   config.home_active_high[0] = false;
   config.home_forward[0] = false;
 
-  // gripper_task.c:138-197. ID254 is broadcast and has no proven individual
-  // replacement.
+  // gripper_task.c:138-197. The former254 slot is inactive; no replacement
+  // is needed for the supported112-only main target group.
   // 0..300deg is the AX protocol domain, not a measured collision-free
   // interval.
   for (const auto id : known_ax_ids) {
@@ -54,6 +54,7 @@ inline void apply_known_parameters(Deployment &config) noexcept {
     // Copy only known mechanism parameters. Existing routing/review/limits stay
     // caller-owned.
     grip.main = source.main;
+    grip.main_active_mask = source.main_active_mask;
     grip.side = source.side;
     grip.cursor = source.cursor;
     grip.pinion = source.pinion;
