@@ -195,16 +195,20 @@ bool maintenance_read_only(std::uint8_t operation) noexcept {
   case 30:
   case 31:
   case 34:
+  case 36:
     return true;
   default:
     return false;
   }
 }
 bool valid_maintenance_request(const MaintenanceRequest &request) noexcept {
-  if (request.operation > 35 || !std::all_of(request.values.begin(), request.values.end(),
+  if (request.operation > 36 || !std::all_of(request.values.begin(), request.values.end(),
                                              [](float value) { return std::isfinite(value); }))
     return false;
   switch (request.operation) {
+  case 36:
+    return request.channel > 0 && request.channel < 254 && request.argument == 0 &&
+           request.secondary == 0 && request.values == std::array<float, 3>{};
   case 8:
   case 11:
   case 25:
@@ -249,12 +253,12 @@ std::optional<MaintenanceReply> decode_maintenance_reply(std::uint8_t operation,
                                                          std::span<const std::uint8_t> payload,
                                                          std::uint8_t channel,
                                                          std::uint32_t argument) noexcept {
-  if (operation > 35 || payload.empty() || payload.size() > 128 || payload[0] > 12)
+  if (operation > 36 || payload.empty() || payload.size() > 128 || payload[0] > 12)
     return {};
   MaintenanceReply reply{};
   reply.error = payload[0];
   if (reply.error != 0)
-    return reply;
+    return operation == 36 && payload.size() != 1 ? std::nullopt : std::optional{reply};
   const auto size = payload.size() - 1;
   bool valid = false;
   switch (operation) {
@@ -288,6 +292,10 @@ std::optional<MaintenanceReply> decode_maintenance_reply(std::uint8_t operation,
         channel <= 5 &&
         size ==
             (channel == 0 ? 5U : (channel == 1 ? 9U : ((channel == 2 || channel == 3) ? 3U : 2U)));
+    break;
+  case 36:
+    valid = size == 12 && channel > 0 && channel < 254 && payload[4] == channel &&
+            payload[11] <= 1 && payload[12] <= 2;
     break;
   case 34:
     valid = size == (argument == 0 ? 2U : 4U);

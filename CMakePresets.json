@@ -63,6 +63,14 @@
       "cacheVariables": {
         "EUROBOT_BOARD_CONFIG": "${sourceDir}/examples/board_8_pumps.hpp"
       }
+    },
+    {
+      "name": "stm32-robot2026",
+      "inherits": "stm32-release",
+      "binaryDir": "${sourceDir}/build/stm32-robot2026",
+      "cacheVariables": {
+        "EUROBOT_BOARD_CONFIG": "${sourceDir}/examples/robot_2026.hpp"
+      }
     }
   ],
   "buildPresets": [
@@ -93,6 +101,10 @@
     {
       "name": "stm32-board8-plan",
       "configurePreset": "stm32-board8-plan"
+    },
+    {
+      "name": "stm32-robot2026",
+      "configurePreset": "stm32-robot2026"
     }
   ],
   "testPresets": [

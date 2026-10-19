@@ -325,6 +325,33 @@ class MaintenanceTests(unittest.TestCase):
         self.assertEqual(value["phase"], "disarmed")
         self.assertEqual(value["dropped_events"], 4)
 
+    def test_servo_probe_exact_raw_reply_and_rejections(self):
+        body = struct.pack("<HBBHHHBB", 12, 34, 98, 0, 1023, 0x1234, 1, 2)
+        value = board.parse_maintenance(36, 98, 0, b"\x00" + body)
+        self.assertEqual((value["model_number"], value["actual_id"], value["present_position_raw"]), (12, 98, 0x1234))
+        self.assertNotIn("position_deg", value)
+        for bad in (body[:-1], body + b"\x00", body[:3] + b"\x63" + body[4:],
+                    body[:10] + b"\x02" + body[11:], body[:11] + b"\x03"):
+            with self.assertRaises(board.ProtocolError): board.parse_maintenance(36, 98, 0, b"\x00" + bad)
+        with self.assertRaises(board.ControllerError): board.parse_maintenance(36, 98, 0, b"\x04")
+        with self.assertRaises(board.ProtocolError): board.parse_maintenance(36, 98, 0, b"\x04\x00")
+        for flags in (("--channel", "0"), ("--channel", "254"), ("--channel", "98", "--arg", "1")):
+            with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+                board.arguments(["--port", "/never/open", "--maintenance", "servo_probe", *flags])
+
+    def test_servo_probe_pty_is_one_query_no_claim_arm_or_retry(self):
+        body = struct.pack("<HBBHHHBB", 12, 34, 98, 0, 1023, 0x1234, 0, 2)
+        for response, expected in ((b"\x00" + body, 0), (b"\x04", 1)):
+            def handle(frame):
+                if frame.opcode == 8: return ack(frame, status())
+                if frame.opcode == 9: return ack(frame, sensors())
+                self.assertEqual(frame.payload, struct.pack("<BBII3f", 36, 98, 0, 0, 0, 0, 0))
+                return ack(frame, response)
+            with Peer(handle) as peer, contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(board.main(["--port", peer.path, "--maintenance", "servo_probe", "--channel", "98"]), expected)
+                self.assertEqual([f.opcode for f in peer.received], [8, 9, 0x24])
+                self.assertTrue(all(f.owner == 0 for f in peer.received))
+
     def test_quantities_stepper_and_corrupt_app_event(self):
         with self.assertRaises(board.ProtocolError): board.parse_maintenance(255, 0, 0, b"\x00")
         quantities = (struct.pack("<I", 13000), struct.pack("<4H", 3990, 4000, 3980, 3970),

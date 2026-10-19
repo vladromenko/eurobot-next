@@ -10,9 +10,22 @@ std::array<std::uint8_t, 8> last_spi{};
 std::array<std::array<std::uint8_t, 8>, 128> spi_trace{};
 std::array<std::int32_t, 3> measured{}, ticks{100, 200, 300};
 bool bus_fail{}, irq_enabled{true};
+bool probe_mode{};
+unsigned probe_calls{}, probe_fail_at{}, probe_writes{};
+std::uint8_t probe_actual_id{98}, probe_torque{1}, probe_return_level{2};
 Error serial(void *, std::span<const std::uint8_t> tx, std::span<std::uint8_t> rx,
              std::size_t &received, std::uint32_t) {
   received = 0;
+  if (probe_mode) {
+    ++probe_calls;
+    if (tx[4] != 2) {
+      ++probe_writes;
+      return Error::output_failure;
+    }
+    if (probe_calls == probe_fail_at) {
+      return Error::timeout;
+    }
+  }
   if (bus_fail)
     return Error::timeout;
   if (rx.empty())
@@ -33,6 +46,25 @@ Error serial(void *, std::span<const std::uint8_t> tx, std::span<std::uint8_t> r
     wire::write_u32(rx.data() + 5, 123456);
     rx[5 + 16] = 80;
     rx[5 + 17] = 4;
+  }
+  if (probe_mode) {
+    if (tx[5] == 0 && count == 18) {
+      std::fill_n(rx.begin() + 5, count, 0);
+      rx[5] = 12; // AX-12 model, not assumed by production code.
+      rx[7] = 34;
+      rx[8] = probe_actual_id;
+      rx[11] = 10; // CW10.
+      rx[13] = 0xff;
+      rx[14] = 3; // CCW1023.
+      rx[21] = probe_return_level;
+    } else if (tx[5] == 24 && count == 1) {
+      rx[5] = probe_torque;
+    } else if (tx[5] == 36 && count == 2) {
+      rx[5] = 0x34;
+      rx[6] = 0x12; // Unknown model units are retained raw.
+    } else {
+      return Error::malformed;
+    }
   }
   unsigned sum = 0;
   for (unsigned i = 2; i < 5U + count; ++i)
@@ -161,6 +193,63 @@ int main() {
   CHECK(Hardware::write_outputs(&uncommissioned, 0, 0) == Error::invalid_config);
   CHECK(fake::shift == 0);
   CHECK(actuate(uncommissioned, 6, 0, 0.5, 0) == Error::invalid_config);
+  // Uncommissioned startup can discover one servo, without any output writes or allowlist.
+  PumpBank probe_pumps{{8, 0, 250, 0}, {&uncommissioned, Hardware::write_outputs}};
+  Chassis probe_chassis{invalid.chassis, {&uncommissioned, Hardware::write_wheels}};
+  Controller probe_controller{probe_pumps, probe_chassis, {&uncommissioned, Hardware::stop_hook}};
+  uncommissioned.controller = &probe_controller;
+  uncommissioned.chassis = &probe_chassis;
+  wire::Dispatcher probe_dispatcher{probe_controller,
+                                    {&uncommissioned, Hardware::actuator, Hardware::sensor_read,
+                                     Hardware::job_request, Hardware::command_guard}};
+  wire::Frame probe{};
+  probe.type = 0x24;
+  probe.length = 22;
+  probe.payload[0] = 36;
+  probe.payload[1] = 98;
+  fake::probe_mode = true;
+  const auto before_probe_shift = fake::shift_calls, before_probe_spi = fake::spi_calls;
+  auto probe_reply = probe_dispatcher.dispatch(probe, 0);
+  CHECK(probe_reply.length == 13 && probe_reply.payload[0] == 0);
+  CHECK(probe_reply.payload[1] == 12 && probe_reply.payload[3] == 34 &&
+        probe_reply.payload[4] == 98);
+  CHECK(probe_reply.payload[5] == 10 && probe_reply.payload[7] == 255 &&
+        probe_reply.payload[8] == 3);
+  CHECK(probe_reply.payload[9] == 0x34 && probe_reply.payload[10] == 0x12 &&
+        probe_reply.payload[11] == 1 && probe_reply.payload[12] == 2);
+  CHECK(fake::probe_calls == 3 && fake::probe_writes == 0 &&
+        fake::shift_calls == before_probe_shift && fake::spi_calls == before_probe_spi);
+  for (auto id : {0U, 254U, 255U}) {
+    probe.payload[1] = static_cast<std::uint8_t>(id);
+    CHECK(probe_dispatcher.dispatch(probe, 0).payload[0] ==
+          static_cast<unsigned>(Error::invalid_argument));
+  }
+  CHECK(fake::probe_calls == 3);
+  probe.payload[1] = 98;
+  probe.payload[2] = 1;
+  CHECK(probe_dispatcher.dispatch(probe, 0).payload[0] ==
+        static_cast<unsigned>(Error::invalid_argument));
+  CHECK(fake::probe_calls == 3);
+  probe.payload[2] = 0;
+  for (unsigned fail_at = 1; fail_at <= 3; ++fail_at) {
+    fake::probe_calls = 0;
+    fake::probe_fail_at = fail_at;
+    probe_reply = probe_dispatcher.dispatch(probe, 0);
+    CHECK(probe_reply.length == 1 &&
+          probe_reply.payload[0] == static_cast<unsigned>(Error::timeout));
+    CHECK(fake::probe_calls == fail_at && !probe_controller.state().fault);
+  }
+  fake::probe_fail_at = 0;
+  fake::probe_actual_id = 99;
+  CHECK(probe_dispatcher.dispatch(probe, 0).payload[0] == static_cast<unsigned>(Error::malformed));
+  fake::probe_actual_id = 98;
+  fake::probe_torque = 2;
+  CHECK(probe_dispatcher.dispatch(probe, 0).payload[0] == static_cast<unsigned>(Error::malformed));
+  fake::probe_torque = 1;
+  fake::probe_return_level = 3;
+  CHECK(probe_dispatcher.dispatch(probe, 0).payload[0] == static_cast<unsigned>(Error::malformed));
+  fake::probe_return_level = 2;
+  fake::probe_mode = false;
   auto config = deployment();
   CHECK(config.valid());
   Hardware hw{config};
@@ -322,6 +411,14 @@ int main() {
   CHECK(job_controller.emergency_stop() == Error::ok);
   CHECK(engine.state().phase == gripper::Phase::faulted && engine.state().error == Error::estop);
   CHECK(!job_hw.servo_deadlines[98].active && !job_controller.state().armed);
+  // Discovery refuses even a disarmed active owner, before accessing the bus.
+  fake::probe_mode = true;
+  fake::probe_calls = 0;
+  std::size_t probe_size = 0;
+  CHECK(Hardware::maintenance_request(&job_hw, std::span(probe.payload).first(22), reply.payload,
+                                      probe_size, 100) == Error::lease_conflict);
+  CHECK(fake::probe_calls == 0);
+  fake::probe_mode = false;
   // Runtime services exercise real handler paths with explicit fake buses.
   application::Application app{job_config.application,
                                {&job_hw, Hardware::application_guard, Hardware::application_stop,

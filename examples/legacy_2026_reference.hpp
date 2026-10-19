@@ -1,5 +1,5 @@
 #pragma once
-#include "eurobot/profile.hpp"
+#include "eurobot/source_2026.hpp"
 #include <array>
 #include <cstdint>
 
@@ -28,27 +28,28 @@ inline constexpr std::uint32_t source_match_duration_ms = 99000;
   }
   // TODO_UNKNOWN: independent routes for pumps5..8 and their valves, or documented extension.
   // Both source grippers share the SAME four confirmed logical routes, never eight invented ones.
+  board::source_2026::apply_known_parameters(config);
   config.motor_ids = known_motor_ids;
   config.chassis.geometry = legacy_2026_geometry();
   // TODO_UNKNOWN: measured velocity/acceleration/TPM/encoder-delta limits remain zero.
   for (std::size_t index = 0; index < config.grippers.size(); ++index) {
     auto &grip = config.grippers[index];
-    grip = gripper::legacy_2026_reference(static_cast<std::uint8_t>(index));
     grip.reviewed = false;
     grip.pump_channels = {0, 1, 2, 3};
     grip.valve_channels = {0, 1, 2, 3};
     // Factory already leaves ambiguous ID254 UNASSIGNED, not replaced with a guessed ID.
-    // TODO_UNKNOWN: actual servo models/IDs/ranges, PCA pulse calibration, lift bounds/speed,
-    // holding/disable policy, source current suitability and chosen composite motion parameters.
+    // Source models/IDs/protocol ranges, PCA calibration, lift speed and disable
+    // behaviour are now filled. Verify physical travel, current suitability and
+    // the remaining primary identity before activation.
   }
   config.application.mode = application::Mode::game;
   config.application.match_duration_ms = source_match_duration_ms;
   config.application.strategy_count = 3;
   config.application.legacy_2025_motor_button_control = false;
   config.debug_uart_enabled = false; // Explicit enable only after wiring PC12/PD2 is verified.
-  // TODO_UNKNOWN: fill allowlists ONLY after identifying devices; source_ax_ids is evidence,
-  // not authorization. All AX/MX/PCA/PWM/DC/stepper enables intentionally remain false.
-  // TODO_UNKNOWN: stepper electrical settings/OCD, real home and ESTOP input polarity/travel.
+  // Known AX/PCA allowlists, L6474 settings and home polarity are filled from source.
+  // Global commissioning and PCA/PWM/DC/stepper activation remain false in this reference.
+  // TODO_UNKNOWN: physical travel and ESTOP wiring; optional devices outside source roles.
   // TODO_UNKNOWN: valve electrical polarity and safe unpowered state; hardware energy isolation.
   // Do not change commissioned/reviewed solely to make validation pass.
   return config;

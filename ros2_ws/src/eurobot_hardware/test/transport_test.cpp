@@ -155,6 +155,33 @@ int main() {
               decode_maintenance_reply(34, stepper_parameter, 0, 1) &&
               !decode_maintenance_reply(34, stepper_status, 0, 1),
           "stepper status is uint16 and named get-parameter response is uint32");
+    MaintenanceRequest probe{36, 98, 0, 0, {}};
+    check(maintenance_read_only(36) && valid_maintenance_request(probe),
+          "servo discovery is read-only without control token");
+    check(encode_maintenance_request(probe, payload) == 22 && payload[0] == 36 && payload[1] == 98,
+          "servo probe emits exact named unicast request");
+    for (auto id : {0U, 254U, 255U}) {
+      probe.channel = static_cast<std::uint8_t>(id);
+      check(!valid_maintenance_request(probe), "servo probe forbids reserved/broadcast IDs");
+    }
+    probe.channel = 98;
+    probe.argument = 1;
+    check(!valid_maintenance_request(probe), "servo probe does not expose raw register argument");
+    std::array<std::uint8_t, 13> discovery{0, 12, 0, 34, 98, 0, 0, 255, 3, 0x34, 0x12, 1, 2};
+    check(decode_maintenance_reply(36, discovery, 98) &&
+              !decode_maintenance_reply(36, std::span(discovery).first(12), 98),
+          "servo probe has exact twelve-byte raw body");
+    check(!decode_maintenance_reply(36, discovery, 99),
+          "servo probe actual ID must match selected channel");
+    discovery[11] = 2;
+    check(!decode_maintenance_reply(36, discovery, 98), "servo probe validates torque boolean");
+    discovery[11] = 1;
+    discovery[12] = 3;
+    check(!decode_maintenance_reply(36, discovery, 98),
+          "servo probe validates status return level");
+    const std::array<std::uint8_t, 2> malformed_probe_nack{4, 0};
+    check(!decode_maintenance_reply(36, malformed_probe_nack, 98),
+          "servo probe NACK cannot include success body");
     const std::array<std::uint8_t, 1> ok{0}, nack{5};
     check(decode_maintenance_reply(2, ok) && !decode_maintenance_reply(3, ok),
           "empty mutation ACK cannot masquerade as wheel feedback");

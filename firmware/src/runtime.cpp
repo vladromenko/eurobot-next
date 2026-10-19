@@ -1307,6 +1307,40 @@ public:
       const auto error = h.reset_odometry();
       return error == Error::ok ? h.chassis->reset_pose({values[0], values[1], values[2]}) : error;
     }
+    case servo_probe: {
+      // Discovery is read-only and deliberately independent of commissioning/allowlists.
+      // A free bus is required; probing must never delay an active owner's commands.
+      if (channel == 0 || channel >= 254 || argument != 0 || secondary != 0 ||
+          values != std::array<float, 3>{}) {
+        return Error::invalid_argument;
+      }
+      if (state.armed || h.controller->lease_active(now)) {
+        return Error::lease_conflict;
+      }
+      std::array<std::uint8_t, 18> identity{};
+      std::array<std::uint8_t, 1> torque{};
+      std::array<std::uint8_t, 2> position{};
+      auto error = h.servo_protocol.read(channel, 0, identity);
+      if (error == Error::ok) {
+        error = h.servo_protocol.read(channel, 24, torque);
+      }
+      if (error == Error::ok) {
+        error = h.servo_protocol.read(channel, 36, position);
+      }
+      if (error != Error::ok) {
+        return error;
+      }
+      if (identity[3] != channel || torque[0] > 1 || identity[16] > 2) {
+        return Error::malformed;
+      }
+      std::copy_n(identity.begin(), 4, output.begin());
+      std::copy_n(identity.begin() + 6, 4, output.begin() + 4);
+      std::copy(position.begin(), position.end(), output.begin() + 8);
+      output[10] = torque[0];
+      output[11] = identity[16];
+      size = 12;
+      return Error::ok;
+    }
     case servo_feedback:
     case servo_led:
     case servo_speed:

@@ -1,5 +1,5 @@
 #pragma once
-#include "eurobot/profile.hpp"
+#include "eurobot/source_2026.hpp"
 
 namespace eurobot::board {
 // New wiring plan for the supplied 20-output board. Electrical/mechanical limits
@@ -12,10 +12,9 @@ namespace eurobot::board {
     config.pump_outputs[i] = connectors::installation_pumps[i];
     config.valve_outputs[i] = connectors::installation_valves[i];
   }
-  config.chassis.geometry = legacy_2026_geometry();
+  source_2026::apply_known_parameters(config);
   for (std::size_t i = 0; i < config.grippers.size(); ++i) {
     auto &grip = config.grippers[i];
-    grip = gripper::legacy_2026_reference(static_cast<std::uint8_t>(i));
     for (std::size_t channel = 0; channel < grip.pump_channels.size(); ++channel) {
       const auto route = static_cast<std::uint8_t>(4 * i + channel);
       grip.pump_channels[channel] = route;

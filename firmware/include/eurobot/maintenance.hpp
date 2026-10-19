@@ -37,7 +37,8 @@ enum class Operation : std::uint8_t {
   pca_control = 32,
   pca_allpulse = 33,
   stepper_parameter = 34,
-  stepper_set_parameter = 35
+  stepper_set_parameter = 35,
+  servo_probe = 36
 };
 enum class Access : std::uint8_t { unsupported, read_only, disarmed, armed, owned };
 constexpr Access access(std::uint8_t operation) noexcept {
@@ -55,6 +56,7 @@ constexpr Access access(std::uint8_t operation) noexcept {
   case Operation::battery_value:
   case Operation::device_ping:
   case Operation::stepper_parameter:
+  case Operation::servo_probe:
     return Access::read_only;
   case Operation::match_arm:
   case Operation::wheel_holding:

@@ -99,8 +99,22 @@ python3 tools/board_test.py --port /dev/cu.usbserial-YOUR_ADAPTER \
 |33 pca_allpulse|armed|argument uint16 pulse µs; все16каналов должны быть разрешены/откалиброваны|
 |34 stepper_parameter|read|channel0…3; argument0=status u16, иначе известный параметр u32; не подготавливает неизвестный driver|
 |35 stepper_set_parameter|disarmed|channel0…3; argument известный register, secondary value; mask/writable validation, reference становится неизвестным|
+|36 servo_probe|read, idle bus|channel=unicast1…253, три чтения identity/torque/position; без allowlist и writes|
 
 Клиент не предоставляет произвольную строку CLI, чужой serial instruction или произвольный адрес памяти. L6474 register interface ограничен таблицей известных параметров, read-only fields защищены. ID254 в legacy main profile остаётся не назначенным до проверки. Пределы и pins не меняются в обход deployment validation.
+
+## Обнаружение неизвестного Dynamixel: только чтение
+
+`servo_probe` (operation36) обращается к одному явно указанному unicast ID1…253 на servo bus USART3. Не требует commissioned profile или AX/MX allowlist, не посылает torque/position/EEPROM writes и не сканирует шину автоматически. При armed Controller или действующей owner lease возвращает lease_conflict, даже если запрос отправил владелец: сначала явно завершить управление.
+
+```sh
+python3 tools/board_test.py --port /dev/cu.usbserial-YOUR_ADAPTER \
+  --maintenance servo_probe --channel 98
+```
+
+Порт — host USART1, не прямое соединение Mac с servo bus. Фактический разъём USART3/DIO и питание сервопривода должны быть подтверждены по схеме. Обнаружение не включает питание и не изменяет состояние torque: оно может прочитать уже включённый torque. Неизвестная модель не преобразуется в угол; CW/CCW/position выводятся raw, чтобы не предполагать шкалу AX300° или MX360°. Timeout/NACK не доказывает отсутствие устройства. Broadcast254/255 и ID0 запрещены. Остальные поля запроса должны быть нулевыми.
+
+Три bounded reads: register0 длина18 (model0/1,firmware2,ID3,CW6/7,CCW8/9,status-return16), torque-enable24 длина1, present-position36 длина2. Ответ:12bytes тела,13 с Error. Смещения тела:0 modelu16;2 firmwareu8;3 actualIDu8;4 CWu16;6 CCWu16;8 positionu16;10 torqueu8;11 status-returnu8. ActualID обязан совпасть с channel, torque0/1 и status-return0…2; при нарушении нет success body. Нет raw-register passthrough. Это программная функция; реальная шина при разработке не опрашивалась.
 
 ## Приложение финальной2026
 
@@ -142,6 +156,7 @@ ACK type0xA4 совпадает по owner/sequence. Byte0 — Error; при о�
 |28|9|available/button/callback/action/stateu8[5],timestampu32|
 |30|5/9/3/3/2/2|knownu8 + quantity поchannel0…5|
 |34|2 либо4|statusu16 приargument0, иначеparameteru32|
+|36|12|modelu16,firmwareu8,actualIDu8,CWu16,CCWu16,positionu16,torqueu8,status-returnu8|
 |Остальные|0|Error0 подтверждает только результат соответствующей команды|
 
 Командный register32 скорости AX/MX отличается от present-speed register38. Settled, referenced и measured также не взаимозаменяемы. Ни прочитанный software step counter, ни SPI ACK не подтверждают положение предмета или вакуум. Все аппаратные известности сохраняются отдельно.

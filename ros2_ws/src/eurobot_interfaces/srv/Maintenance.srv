@@ -35,6 +35,8 @@ uint8 PCA_CONTROL=32
 uint8 PCA_ALL_PULSE=33
 uint8 STEPPER_PARAMETER=34
 uint8 STEPPER_SET_PARAMETER=35
+# Read-only unconfigured servo identity; idle bus only, raw model-dependent units.
+uint8 SERVO_PROBE=36
 # Zero is allowed only for read-only operations. Mutation requires current session token.
 uint32 control_token
 uint8 operation
