@@ -1,6 +1,6 @@
 # Установка и подготовка EUROBOT NEXT
 
-**Текущая программная редакция собрана и проверена.** Host, ASan/UBSan и host C++26: по53/53 CTest; STM32 debug/release/C++26 ELF/HEX/BIN и ROS2 Jazzy/Lyrical colcon build/test — PASS. Подробности и журналы: TESTING/VALIDATION_REPORT. Это не аппаратная приёмка и не разрешение вооружать default deployment. После изменения исходников, deployment, компилятора или пути проекта нужен свежий configure/build и согласованный manifest. Результаты34/34 и ранее сохранённые образы относятся к историческому срезу, а не автоматически к новой прошивке. Физическая загрузка владельцем — отдельный последующий шаг.
+**Текущая программная редакция собрана и проверена.** Host, ASan/UBSan и host C++26: по62/62 CTest; STM32 debug/release/C++26 ELF/HEX/BIN и ROS2 Jazzy/Lyrical colcon build/test — PASS. Подробности и журналы: TESTING/VALIDATION_REPORT. Это не аппаратная приёмка и не разрешение вооружать default deployment. После изменения исходников, deployment, компилятора или пути проекта нужен свежий configure/build и согласованный manifest. Результаты34/34 и ранее сохранённые образы относятся к историческому срезу, а не автоматически к новой прошивке. Физическая загрузка владельцем — отдельный последующий шаг.
 
 Финальная прошивка 2026 определяет захваты и команды. Версия 2025 служит базой/историей; она не заменяет поведение, присутствующее в 2026. См. [сравнение](COMPARISON_2025_2026_NEXT.md), [сценарии](GRIPPER_SCENARIOS.md).
 
@@ -129,7 +129,7 @@ tools/dependencies.sh
 
 Подтверждено **кодом**: STM32F407VG; HSE16MHz; targetSYSCLK168MHz; SPI24bits/20poweroutputs; USART1 новойпрошивки 115200; Maxon IDs0x22,0x21,0x23; L0.1217m,r0.0295m,gear28,ticks4096. Только 4 различных pumps1/3/5/7 и valves2/4/6/8, оба legacy gripper разделяютих. Cursor98,pinion13; mainID254 остаётся заблокированным. Подробные angles/channels: [GRIPPER_SCENARIOS.md](GRIPPER_SCENARIOS.md).
 
-Неизвестны реальные motor current/PSUbudget/valvepolarity, проводка pump5…8, точные servoIDs вместо 254, физические limits/ход/знаки, homingpolarity/travel, payload удержание при disable, worst-case latency/WCET. Ни одно поле нельзя заполнять случайным тестовым числом. При текущем 20outputbackend32logicalchannels не означают 32 физических насоса с 32 клапанами; понадобится подтверждённое расширение электроники.
+Неизвестны реальные motor current/PSUbudget/valvepolarity, исполнение новой разводки PO1…PO16 и физическая связь USART3/DIO, точные servoIDs вместо 254, физические limits/ход/знаки, homingpolarity/travel, payload удержание при disable, worst-case latency/WCET. Ни одно поле нельзя заполнять случайным тестовым числом. При текущем 20outputbackend32logicalchannels не означают 32 физических насоса с 32 клапанами; понадобится подтверждённое расширение электроники.
 
 ## 6. Последующая ручная сборка и тесты
 
@@ -191,7 +191,7 @@ colcon test-result --verbose
 - Armcompiler не найден: ARM_TOOLCHAIN_BIN должен указывать bin с arm-none-eabi-g++,не hostclang и не aarch64-linux-gnu.
 - CMake cache содержит /private/tmp илидругуюмашину: создатьновуюконфигурациюв buildtree проекта;не переносить чужой cache.
 - dependencies.sh сообщает revision mismatch: не менятьожидаемый hash ради успешного выхода; проверить origin/tag/локальныеправки.
-- Defaultprofile не arm: ожидаемо при commissioned=false,нулевых limits илинеизвестных pump5…8. Исправление—подтверждённая конфигурация,неудаление validation.
+- Defaultprofile не arm: ожидаемо при commissioned=false,нулевых limits илинезаполненных routes базового профиля. Исправление—подтверждённая конфигурация,неудаление validation.
 - ROScolcon/Docker не установлен/daemon недоступен: отметить BLOCKED или NOTEXECUTED;неподменятьего hostPTYtest.
 
 ## Приложение, сервисные функции и второй UART
@@ -201,3 +201,7 @@ colcon test-result --verbose
 `Deployment.application` задаёт временные параметры входов, GAME/DEBUG mode, duration и явную2025 motor-button compatibility. Период Control10ms ограничивает разрешение временного debounce; это не заявление об измеренных восьми1ms samples. `Deployment.debug_uart_enabled=false` по умолчанию. Если схема подтверждена, UART5 PC12TX/PD2RX115200 даёт тот же versioned protocol и общий owner с USART1; старый raw debug protocol намеренно заменён. Внешние клиенты не получают независимое владение механизмами через debug.
 
 Дополнительно появились generic PWM allowlists/frequency по банкам, `dc_brake_configured/dc_brake_high`, source-style stepper ramp/profile и bounded homing profile. Числа из legacy не заменяют реальные пределы. Пример [legacy_2026_reference.hpp](../examples/legacy_2026_reference.hpp) содержит подтверждённые source facts и именованные TODO_UNKNOWN; commissioned/reviewed остаются false. Он не заменяет существующий `examples/deployment.hpp` и не вооружается. В нём явно показаны четыре общих pump routes, geometry2026, motor IDs и GAME99000, без вымышленных значений для неизвестной механики.
+
+## Присланная карта платы и новая разводка8+8
+
+[BOARD_WIRING.md](BOARD_WIRING.md) показывает подключения ST-LINK, USB–UART, питания, всех13 входов, PWM, шаговых приводов и нагрузок. Для новой разводки насосы/клапаны1…8 назначены парами PO1/2,…,PO15/16, PO17…20 свободны. Используйте [board_8_pumps.hpp](../examples/board_8_pumps.hpp) как основу своего deployment: в нём уже заданы физические routes и две независимые группы захватов. Электрические/механические limits и IDs по-прежнему заполняются только из оборудования. USART2 на рисунке не является используемым USART3 Dynamixel; его внешний DIO нужно подтвердить по цепи.

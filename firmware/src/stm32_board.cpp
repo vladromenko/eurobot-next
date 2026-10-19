@@ -4,6 +4,11 @@
 #include <cmath>
 namespace {
 using eurobot::Error;
+namespace connector = eurobot::board::connectors;
+GPIO_TypeDef *gpio_port(connector::Port port) {
+  return std::array<GPIO_TypeDef *, 5>{GPIOA, GPIOB, GPIOC, GPIOD,
+                                       GPIOE}[static_cast<unsigned>(port)];
+}
 struct Serial {
   USART_TypeDef *uart;
   GPIO_TypeDef *de;
@@ -21,14 +26,8 @@ void *step_context{};
 Error (*step_tick)(void *, std::uint32_t){};
 alignas(4) std::array<std::uint16_t, 60 * 24 + 400> led_dma{};
 static_assert(std::atomic<std::uint32_t>::is_always_lock_free);
-struct Stepper {
-  GPIO_TypeDef *cs;
-  unsigned cspin;
-  unsigned dirpin;
-  unsigned steppin;
-};
-std::array<Stepper, 4> steppers{
-    {{GPIOE, 7, 8, 9}, {GPIOD, 10, 10, 11}, {GPIOD, 11, 12, 13}, {GPIOC, 9, 15, 14}}};
+using Stepper = connector::Stepper;
+auto steppers = connector::steppers;
 void bit_set(volatile std::uint32_t &reg, std::uint32_t bits) { reg = reg | bits; }
 void bit_clear(volatile std::uint32_t &reg, std::uint32_t bits) { reg = reg & ~bits; }
 void pin_write(GPIO_TypeDef *port, unsigned pin, bool on) {
@@ -94,13 +93,13 @@ Error l6474_transfer(void *ctx, std::span<const std::uint8_t> tx, std::span<std:
   bit_clear(SPI1->CR1, SPI_CR1_SPE);
   SPI1->CR1 = (SPI1->CR1 & ~SPI_CR1_BR) | (4U << 3) | SPI_CR1_SPE;
   for (std::size_t i = 0; i < tx.size() && result == Error::ok; ++i) {
-    pin_write(s.cs, s.cspin, false);
+    pin_write(gpio_port(s.chip_select.port), s.chip_select.bit, false);
     (void)eurobot::board::delay_us(1);
     std::uint8_t received = 0;
     result = spi_byte(tx[i], received, start, timeout);
     if (!rx.empty())
       rx[i] = received;
-    pin_write(s.cs, s.cspin, true);
+    pin_write(gpio_port(s.chip_select.port), s.chip_select.bit, true);
     (void)eurobot::board::delay_us(1);
   }
   bit_clear(SPI1->CR1, SPI_CR1_SPE);
@@ -111,24 +110,24 @@ Error step_config(void *ctx, bool forward, std::uint32_t period) {
   if (period < 4)
     return Error::invalid_argument;
   auto &s = *static_cast<Stepper *>(ctx);
-  pin_write(GPIOE, s.dirpin, forward);
+  pin_write(gpio_port(s.direction.port), s.direction.bit, forward);
   return eurobot::board::delay_us(2);
 }
 Error step_pulse(void *ctx) {
   auto &s = *static_cast<Stepper *>(ctx);
-  pin_write(GPIOE, s.steppin, true);
+  pin_write(gpio_port(s.step.port), s.step.bit, true);
   auto e = eurobot::board::delay_us(2);
-  pin_write(GPIOE, s.steppin, false);
+  pin_write(gpio_port(s.step.port), s.step.bit, false);
   return e;
 }
 Error step_stop(void *ctx) {
   auto &s = *static_cast<Stepper *>(ctx);
-  pin_write(GPIOE, s.steppin, false);
+  pin_write(gpio_port(s.step.port), s.step.bit, false);
   return Error::ok;
 }
 Error driver_direction(void *ctx, bool forward) {
   auto &s = *static_cast<Stepper *>(ctx);
-  pin_write(GPIOE, s.dirpin, forward);
+  pin_write(gpio_port(s.direction.port), s.direction.bit, forward);
   return eurobot::board::delay_us(2);
 }
 Error i2c_abort(Error e) {
@@ -253,8 +252,8 @@ Error i2c_read(void *, std::uint8_t addr, std::uint8_t reg, std::span<std::uint8
   return Error::ok;
 }
 Error i2c_delay(void *, std::uint32_t us) { return eurobot::board::delay_us(us); }
-TIM_TypeDef *pwm_timer(std::uint8_t ch) { return ch < 4 ? TIM4 : TIM5; }
-unsigned pwm_index(std::uint8_t ch) { return ch < 4 ? 3 - ch : ch - 4; }
+TIM_TypeDef *pwm_timer(std::uint8_t ch) { return connector::pwm[ch].timer == 4 ? TIM4 : TIM5; }
+unsigned pwm_index(std::uint8_t ch) { return connector::pwm[ch].channel - 1; }
 void pwm_init(std::uint8_t ch, std::uint32_t period) {
   auto *timer = pwm_timer(ch);
   auto index = pwm_index(ch);
@@ -274,10 +273,8 @@ void pwm_compare(std::uint8_t ch, std::uint32_t compare) {
   std::array<volatile std::uint32_t *, 4>{&timer->CCR1, &timer->CCR2, &timer->CCR3,
                                           &timer->CCR4}[idx][0] = compare;
   timer->CCER = timer->CCER | (1U << (idx * 4));
-  if (ch < 4)
-    pin_mode(GPIOD, 15 - ch, 2, 2);
-  else
-    pin_mode(GPIOA, ch - 4, 2, 2);
+  const auto pin = connector::pwm[ch].pin;
+  pin_mode(gpio_port(pin.port), pin.bit, 2, 2);
 }
 } // namespace
 namespace eurobot::board {
@@ -286,20 +283,15 @@ Error initialize() noexcept {
   bit_set(RCC->AHB1ENR, 0x1f);
   [[maybe_unused]] auto sync = RCC->AHB1ENR;
   for (auto &s : steppers) {
-    pin_write(s.cs, s.cspin, true);
-    pin_mode(s.cs, s.cspin, 1);
-    pin_write(GPIOE, s.steppin, false);
-    pin_mode(GPIOE, s.steppin, 1);
-    pin_mode(GPIOE, s.dirpin, 1);
+    pin_write(gpio_port(s.chip_select.port), s.chip_select.bit, true);
+    pin_mode(gpio_port(s.chip_select.port), s.chip_select.bit, 1);
+    pin_write(gpio_port(s.step.port), s.step.bit, false);
+    pin_mode(gpio_port(s.step.port), s.step.bit, 1);
+    pin_mode(gpio_port(s.direction.port), s.direction.bit, 1);
   }
-  for (unsigned i = 0; i < 8; ++i) {
-    if (i < 4) {
-      pin_write(GPIOD, 15 - i, false);
-      pin_mode(GPIOD, 15 - i, 1);
-    } else {
-      pin_write(GPIOA, i - 4, false);
-      pin_mode(GPIOA, i - 4, 1);
-    }
+  for (const auto &channel : connector::pwm) {
+    pin_write(gpio_port(channel.pin.port), channel.pin.bit, false);
+    pin_mode(gpio_port(channel.pin.port), channel.pin.bit, 1);
   }
   bit_set(RCC->APB1ENR, RCC_APB1ENR_PWREN);
   PWR->CR = (PWR->CR & ~PWR_CR_VOS) | PWR_CR_VOS;
@@ -332,11 +324,11 @@ Error initialize() noexcept {
   auto e = shift_write(0);
   if (e != Error::ok)
     return e;
-  pin_mode(GPIOA, 9, 2, 7);
-  pin_mode(GPIOA, 10, 2, 7);
+  pin_mode(gpio_port(connector::host_tx.port), connector::host_tx.bit, 2, 7);
+  pin_mode(gpio_port(connector::host_rx.port), connector::host_rx.bit, 2, 7);
   uart_init(USART1, 84000000, 115200, false);
-  pin_mode(GPIOC, 12, 2, 8);
-  pin_mode(GPIOD, 2, 2, 8);
+  pin_mode(gpio_port(connector::debug_tx.port), connector::debug_tx.bit, 2, 8);
+  pin_mode(gpio_port(connector::debug_rx.port), connector::debug_rx.bit, 2, 8);
   uart_init(UART5, 42000000, 115200, false);
   for (auto *s : {&motors, &servos, &battery}) {
     pin_write(s->de, s->pin, false);
@@ -356,21 +348,8 @@ Error initialize() noexcept {
   I2C2->CCR = 210;
   I2C2->TRISE = 43;
   I2C2->CR1 = I2C_CR1_PE | I2C_CR1_ACK;
-  const std::array<std::pair<GPIO_TypeDef *, unsigned>, 13> inputs{{{GPIOC, 15},
-                                                                    {GPIOE, 6},
-                                                                    {GPIOE, 5},
-                                                                    {GPIOE, 2},
-                                                                    {GPIOC, 14},
-                                                                    {GPIOC, 13},
-                                                                    {GPIOE, 4},
-                                                                    {GPIOE, 3},
-                                                                    {GPIOE, 0},
-                                                                    {GPIOB, 7},
-                                                                    {GPIOB, 4},
-                                                                    {GPIOB, 3},
-                                                                    {GPIOD, 3}}};
-  for (auto [port, pin] : inputs)
-    pin_mode(port, pin, 0);
+  for (auto pin : connector::inputs)
+    pin_mode(gpio_port(pin.port), pin.bit, 0);
   NVIC_SetPriorityGrouping(3);
   NVIC_SetPriority(USART1_IRQn, 6);
   NVIC_ClearPendingIRQ(USART1_IRQn);
@@ -531,13 +510,9 @@ Error pwm_disable(std::uint8_t ch) noexcept {
     return Error::invalid_argument;
   auto *timer = pwm_timer(ch);
   bit_clear(timer->CCER, 1U << (pwm_index(ch) * 4));
-  if (ch < 4) {
-    pin_write(GPIOD, 15 - ch, false);
-    pin_mode(GPIOD, 15 - ch, 1);
-  } else {
-    pin_write(GPIOA, ch - 4, false);
-    pin_mode(GPIOA, ch - 4, 1);
-  }
+  const auto pin = connector::pwm[ch].pin;
+  pin_write(gpio_port(pin.port), pin.bit, false);
+  pin_mode(gpio_port(pin.port), pin.bit, 1);
   return Error::ok;
 }
 Error pwm_group_frequency(std::uint8_t bank, std::uint32_t hz) noexcept {
@@ -611,10 +586,10 @@ Error dc_brake(std::uint8_t channel, bool high, std::uint32_t frequency) noexcep
 }
 
 bool input(std::uint8_t index) noexcept {
-  const std::array<GPIO_TypeDef *, 13> ports{GPIOC, GPIOE, GPIOE, GPIOE, GPIOC, GPIOC, GPIOE,
-                                             GPIOE, GPIOE, GPIOB, GPIOB, GPIOB, GPIOD};
-  constexpr std::array<unsigned, 13> pins{15, 6, 5, 2, 14, 13, 4, 3, 0, 7, 4, 3, 3};
-  return index < 13 && (ports[index]->IDR & (1U << pins[index])) != 0;
+  if (index >= connector::inputs.size())
+    return false;
+  const auto pin = connector::inputs[index];
+  return (gpio_port(pin.port)->IDR & (1U << pin.bit)) != 0;
 }
 void stepper_service(void *context, Error (*tick)(void *, std::uint32_t)) noexcept {
   step_context = context;
@@ -701,7 +676,7 @@ void watchdog_feed() noexcept { IWDG->KR = 0xaaaa; }
 [[noreturn]] void fail_safe() noexcept {
   __disable_irq();
   for (auto &s : steppers)
-    pin_write(GPIOE, s.steppin, false);
+    pin_write(gpio_port(s.step.port), s.step.bit, false);
   for (unsigned i = 0; i < 8; ++i)
     (void)pwm_disable(static_cast<std::uint8_t>(i));
   if ((RCC->APB2ENR & RCC_APB2ENR_SPI1EN) != 0)

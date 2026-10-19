@@ -14,7 +14,7 @@ namespace {
 using namespace eurobot;
 using namespace eurobot::devices;
 using eurobot::board::Deployment;
-constexpr std::array<unsigned, 4> reset_bits{8, 9, 17, 16};
+constexpr auto reset_bits = board::connectors::stepper_reset_bits;
 struct StepGuard {
   StepGuard() { board::stepper_irq(false); }
   ~StepGuard() { board::stepper_irq(true); }

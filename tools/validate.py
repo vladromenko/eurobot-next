@@ -21,7 +21,7 @@ def run(name,command):
  if result.returncode:finish(False);raise SystemExit(result.returncode)
 def finish(success):
  images={}
- for preset in ('stm32-debug','stm32-release','stm32-cxx26-probe'):
+ for preset in ('stm32-debug','stm32-release','stm32-board8-plan','stm32-cxx26-probe'):
   path=root/'build'/preset/'firmware/eurobot_next.bin'
   if path.is_file():
    images[preset]={'image_size':path.stat().st_size,'sha256':hashlib.sha256(path.read_bytes()).hexdigest()}
@@ -40,10 +40,11 @@ for preset in ('host','host-sanitize'):
 for name in ('core','device','gripper','application','runtime'):
  run(name+'_unit_details',[str(root/'build/host-sanitize'/('eurobot_'+name+'_tests'))])
 run('static_analysis',['bash','tools/static_analysis.sh','--build-dir','build/host-sanitize'])
-for preset in ('stm32-debug','stm32-release'):
+for preset in ('stm32-debug','stm32-release','stm32-board8-plan'):
  run('configure_'+preset,['cmake','--preset',preset,'--fresh'])
  run('build_'+preset,['cmake','--build','--preset',preset,'--clean-first','--parallel'])
  run('verify_'+preset,['bash','tools/verify.sh','--image','build/'+preset+'/firmware/eurobot_next.bin'])
+run('linked_features',[sys.executable,'tools/audit_elf_features.py'])
 if args.experimental_cxx26:
  for preset in ('cxx26-probe','stm32-cxx26-probe'):
   run('configure_'+preset,['cmake','--preset',preset,'--fresh'])

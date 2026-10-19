@@ -55,6 +55,14 @@
       "cacheVariables": {
         "EUROBOT_EXPERIMENTAL_CXX26": "ON"
       }
+    },
+    {
+      "name": "stm32-board8-plan",
+      "inherits": "stm32-release",
+      "binaryDir": "${sourceDir}/build/stm32-board8-plan",
+      "cacheVariables": {
+        "EUROBOT_BOARD_CONFIG": "${sourceDir}/examples/board_8_pumps.hpp"
+      }
     }
   ],
   "buildPresets": [
@@ -81,6 +89,10 @@
     {
       "name": "stm32-cxx26-probe",
       "configurePreset": "stm32-cxx26-probe"
+    },
+    {
+      "name": "stm32-board8-plan",
+      "configurePreset": "stm32-board8-plan"
     }
   ],
   "testPresets": [

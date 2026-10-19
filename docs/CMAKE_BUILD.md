@@ -23,7 +23,7 @@ cmake --preset stm32-release
 cmake --build --preset stm32-release
 ```
 
-Путь к `arm-none-eabi-*` должен быть в PATH либо в переменной ARM_TOOLCHAIN_BIN. На macOS toolchain также ищет комплект ARM GNU внутри установленного STM32CubeIDE; Keil при этом не нужен. Зависимости готовит tools/dependencies.sh. Заголовок проверенного профиля передаётся -DEUROBOT_BOARD_CONFIG=/absolute/path/deployment.hpp; он предоставляет make_deployment(), как examples/deployment.hpp. Пример намеренно не содержит вымышленных привязок 5–8 и не вооружается. Дополнительный probe:
+Путь к `arm-none-eabi-*` должен быть в PATH либо в переменной ARM_TOOLCHAIN_BIN. На macOS toolchain также ищет комплект ARM GNU внутри установленного STM32CubeIDE; Keil при этом не нужен. Зависимости готовит tools/dependencies.sh. Заголовок проверенного профиля передаётся -DEUROBOT_BOARD_CONFIG=/absolute/path/deployment.hpp; он предоставляет make_deployment(), как examples/deployment.hpp. Базовый пример не вооружается. Для предписанной новой разводки8+8 на PO1…PO16 есть examples/board_8_pumps.hpp; он также оставляет commissioning и неизвестные limits выключенными. Дополнительный probe:
 
 ```sh
 cmake --preset cxx26-probe

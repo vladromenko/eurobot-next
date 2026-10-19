@@ -1,12 +1,12 @@
 #pragma once
 #include "eurobot/application.hpp"
+#include "eurobot/board_connectors.hpp"
 #include "eurobot/core.hpp"
 #include "eurobot/devices.hpp"
 #include "eurobot/gripper.hpp"
 #include <cmath>
 namespace eurobot::board {
-inline constexpr std::array<std::uint8_t, 20> output_bits{20, 21, 18, 19, 22, 23, 10, 11, 14, 15,
-                                                          12, 13, 6,  7,  4,  5,  2,  3,  1,  0};
+inline constexpr auto output_bits = connectors::power_register_bits;
 enum class DcMode : std::uint8_t { unconfigured, legacy_high_pair, coast_pwm };
 [[nodiscard]] inline std::optional<std::array<float, 2>> dc_pwm_pair(float duty,
                                                                      DcMode mode) noexcept {

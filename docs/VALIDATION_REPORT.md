@@ -2,7 +2,7 @@
 
 Статус: **BLOCKED BY MISSING HARDWARE INFORMATION** для вооружённой конфигурации робота. Программные проверки ниже завершены; безопасный диагностический образ не разрешает исполнительные выходы без commissioned deployment.
 
-Дата: 2026-10-19T03:13:32.437192+03:00 (Europe/Moscow). Итог свежего прогона: **PASS**.
+Дата: 2026-10-19T03:37:06.847497+03:00 (Europe/Moscow). Итог свежего прогона: **PASS**.
 
 [Машинный результат и журналы](../artifacts/validation/results.json). Source fingerprint фиксирует firmware, ROS, тесты, инструменты и примеры. Журналы/образы исключены из Git; они доступны в локальном проекте.
 
@@ -29,6 +29,10 @@
 | configure_stm32-release | PASS | [configure_stm32-release.log](../artifacts/validation/configure_stm32-release.log) |
 | build_stm32-release | PASS | [build_stm32-release.log](../artifacts/validation/build_stm32-release.log) |
 | verify_stm32-release | PASS | [verify_stm32-release.log](../artifacts/validation/verify_stm32-release.log) |
+| configure_stm32-board8-plan | PASS | [configure_stm32-board8-plan.log](../artifacts/validation/configure_stm32-board8-plan.log) |
+| build_stm32-board8-plan | PASS | [build_stm32-board8-plan.log](../artifacts/validation/build_stm32-board8-plan.log) |
+| verify_stm32-board8-plan | PASS | [verify_stm32-board8-plan.log](../artifacts/validation/verify_stm32-board8-plan.log) |
+| linked_features | PASS | [linked_features.log](../artifacts/validation/linked_features.log) |
 | configure_cxx26-probe | PASS | [configure_cxx26-probe.log](../artifacts/validation/configure_cxx26-probe.log) |
 | build_cxx26-probe | PASS | [build_cxx26-probe.log](../artifacts/validation/build_cxx26-probe.log) |
 | test_cxx26-probe | PASS | [test_cxx26-probe.log](../artifacts/validation/test_cxx26-probe.log) |
@@ -46,9 +50,10 @@
 
 | Preset | BIN/Flash байт | SRAM байт | SHA256 BIN |
 |---|---:|---:|---|
-| stm32-debug | 143060 | 53280 | `6b1d4c71e442a3d629d5cc2863dab8041fe8cbf00d9c2498d1f5bd54d46ef183` |
-| stm32-release | 108584 | 53280 | `a27aebdcdc5a3056b19b12ca2ecf42dcefb19b32b5ebdc7ef8385457c420b4f2` |
-| stm32-cxx26-probe | 108584 | 53280 | `a27aebdcdc5a3056b19b12ca2ecf42dcefb19b32b5ebdc7ef8385457c420b4f2` |
+| stm32-debug | 142228 | 53240 | `16e9f847005b7c3ecffc176783d877461e166d7e8608e79c857d8be661f72742` |
+| stm32-release | 106728 | 53240 | `7989144fa72522c13b2f1e6847aa88a32077171fca9c0b99fdb45ea3e2f7cecf` |
+| stm32-board8-plan | 104264 | 53248 | `0a1506dde4b89cc2ac8faa09238ddf70a6eb84c4c60a49582f30587573ca501b` |
+| stm32-cxx26-probe | 106728 | 53240 | `7989144fa72522c13b2f1e6847aa88a32077171fca9c0b99fdb45ea3e2f7cecf` |
 
 ## ROS 2
 
@@ -65,7 +70,7 @@
 
 ## Аппаратные ограничения
 
-Реальные SWD connect/read/flash, STM32 boot, UART робота и движения НЕ выполнялись. Default deployment намеренно не вооружается. До испытания нагрузок нужно подтвердить MCU/HSE, карту насосов5…8 и мощность, клапаны/полярности, индивидуальный servo вместо broadcastID254, конфликтующие legacy IDs, реальные ограничения механизмов/колёс, homing/ESTOP и параметры силовых драйверов. Для16/32 физических насосов с клапанами требуется подходящий расширенный output backend: известная исходная плата имеет20 силовых выходов; универсальные32-битные маски не добавляют выводы.
+Реальные SWD connect/read/flash, STM32 boot, UART робота и движения НЕ выполнялись. Default deployment намеренно не вооружается. До испытания нагрузок нужно подтвердить MCU/HSE, исполнение новой разводки PO1…PO16 и мощность, клапаны/полярности, физическое подключение USART3/DIO, индивидуальный servo вместо broadcastID254, конфликтующие legacy IDs, реальные ограничения механизмов/колёс, homing/ESTOP и параметры силовых драйверов. Для16/32 физических насосов с клапанами требуется подходящий расширенный output backend: известная исходная плата имеет20 силовых выходов; универсальные32-битные маски не добавляют выводы.
 
 После конфигурации: питание логики без нагрузок → SWD identity/backup/flash/readback → ручной reset после halt → UART status/sensors/maintenance readonly → проверка safe boot и сигналов → по одному механизму с ограничением энергии → потеря связи/ESTOP → ROS. Подробно: [CONNECT_AND_FLASH.md](CONNECT_AND_FLASH.md), [MACOS_BOARD_TEST.md](MACOS_BOARD_TEST.md), [FLASH_UBUNTU.md](FLASH_UBUNTU.md).
 
@@ -83,6 +88,9 @@ SHA256164 исходных справочных файлов проверены 
 
 Ни host tests, ни ARM link, ни ROS tests не являются аппаратной валидацией. Основной язык C++23; C++26 probe подтверждает только реально собранные конструкции конкретных компиляторов.
 
+## Карта разъёмов владельца
+
+Распиновка GPIO/PWM/Stepper и24 бит силового регистра централизована в board_connectors.hpp и используется реальным STM32 adapter. Новый eight_pump_installation()/examples/board_8_pumps.hpp назначает8 насосов и8 клапанов на PO1…PO16, захваты используют разные логические группы0…3/4…7; PO17…20 свободны. Профиль остаётся uncommissioned до аппаратной настройки. Проверяются все13 входов, PWM bank order, partition20PO+4NRST, включение новых каналов и сохранение reset. Таблица подключения: [BOARD_WIRING.md](BOARD_WIRING.md).
 
 ## Дополнительный анализ ELF/MAP
 

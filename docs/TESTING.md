@@ -4,28 +4,29 @@
 
 ## Текущая редакция
 
-Итоговая проверка текущих исходников завершена успешно19.10.2026. Журнал [results.json](../artifacts/validation/results.json) фиксирует `success=true` и `sources_unchanged=true`. Верификационный fingerprint: `1a5757d3ed98f8b2c1a145d26e851808e8ff1ca9c0039ff5950ff2b14774cd2d`. Старые34/34 и старые размеры образов не используются как подтверждение этого среза.
+Итоговая проверка текущих исходников завершена успешно19.10.2026. Журнал [results.json](../artifacts/validation/results.json) фиксирует `success=true` и `sources_unchanged=true`. Верификационный fingerprint: `cf5498e0d2324bd67f5af9a52cfe230c53040ea07c41575e31d8fede4c63a7dd`. Старые34/34 и старые размеры образов не используются как подтверждение этого среза.
 
 | Проверка | Фактический результат | Журнал |
 |---|---|---|
-| Host C++23 |53/53 CTest PASS|[host](../artifacts/validation/test_host.log)|
-| Host C++23 ASan/UBSan |53/53 CTest PASS|[sanitizers](../artifacts/validation/test_host-sanitize.log)|
-| Host C++26 experiment |53/53 CTest PASS|[C++26](../artifacts/validation/test_cxx26-probe.log)|
+| Host C++23 |62/62 CTest PASS|[host](../artifacts/validation/test_host.log)|
+| Host C++23 ASan/UBSan |62/62 CTest PASS|[sanitizers](../artifacts/validation/test_host-sanitize.log)|
+| Host C++26 experiment |62/62 CTest PASS|[C++26](../artifacts/validation/test_cxx26-probe.log)|
 | Core / devices / gripper / application / runtime |1427 /7931 /282 /2672 /123 checks PASS|[core](../artifacts/validation/core_unit_details.log), [devices](../artifacts/validation/device_unit_details.log), [gripper](../artifacts/validation/gripper_unit_details.log), [application](../artifacts/validation/application_unit_details.log), [runtime](../artifacts/validation/runtime_unit_details.log)|
-| STM32 debug |ELF/HEX/BIN/MAP/manifest PASS; Flash143060B, SRAM53280B, CCM0|[build](../artifacts/validation/build_stm32-debug.log)|
-| STM32 release |ELF/HEX/BIN/MAP/manifest PASS; Flash108584B, SRAM53280B, CCM0|[build](../artifacts/validation/build_stm32-release.log)|
-| STM32 C++26 experiment |Полная сборка/офлайн verify PASS; Flash108584B, SRAM53280B, CCM0|[build](../artifacts/validation/build_stm32-cxx26-probe.log)|
+| STM32 debug |ELF/HEX/BIN/MAP/manifest PASS; Flash142228B, SRAM53240B, CCM0|[build](../artifacts/validation/build_stm32-debug.log)|
+| STM32 release |ELF/HEX/BIN/MAP/manifest PASS; Flash106728B, SRAM53240B, CCM0|[build](../artifacts/validation/build_stm32-release.log)|
+| STM32 C++26 experiment |Полная сборка/офлайн verify PASS; Flash106728B, SRAM53240B, CCM0|[build](../artifacts/validation/build_stm32-cxx26-probe.log)|
+| STM32 board8 plan |Отдельный новый deployment8+8: ELF/HEX/BIN/MAP/manifest и linked audit PASS; Flash104264B, SRAM53248B, CCM0|[build](../artifacts/validation/build_stm32-board8-plan.log)|
 | ROS2 Jazzy Docker Linux |3 packages build/test;3tests,0errors/0failures/0skipped|[colcon](../artifacts/validation/ros2_jazzy.log)|
 | ROS2 Lyrical Docker Linux |3 packages build/test;3tests,0errors/0failures/0skipped|[colcon](../artifacts/validation/ros2_lyrical.log)|
-| Clang static analysis |16 translation units PASS|[analysis](../artifacts/validation/static_analysis.log)|
+| Clang static analysis |17 translation units PASS|[analysis](../artifacts/validation/static_analysis.log)|
 | Format / source policy / pinned dependencies |PASS|[format](../artifacts/validation/format.log), [policy](../artifacts/validation/source_policy.log), [dependencies](../artifacts/validation/dependencies.log)|
 | Оригинальные source files |164/164 SHA256 совпадают, vendor notices сохранены|[audit](../artifacts/validation/source_integrity.log)|
 
-В53 CTest входят44 GoogleTests:18 deployment/profile,11 inputs,3 sensors,3 gripper wire,9 maintenance wire; остальные — отдельные harness/инструменты. Counts1427/7931/282/2672/123 — утверждения внутри программ, не число физических сценариев. Mac client26/26 local PTY/mock и flash-tool24/24 mocks входят в общую проверку; реальный UART/SWD не открывался. Reference header отдельно прошёл строгую C++23 syntax check и остаётся uncommissioned.
+В62 CTest входят53 GoogleTests:18 deployment/profile,11 inputs,3 sensors,3 gripper wire,9 maintenance wire,9 board connectors/installation; остальные — отдельные harness/инструменты. Counts1427/7931/282/2672/123 — утверждения внутри программ, не число физических сценариев. Mac client26/26 local PTY/mock и flash-tool24/24 mocks входят в общую проверку; реальный UART/SWD не открывался. Reference header отдельно прошёл строгую C++23 syntax check и остаётся uncommissioned.
 
-Все три ARM ELF прошли hard-float/vector/feature/no-heap/no-exception/no-RWX проверки и согласование manifest. SRAM totals включают4096B резерва MSP; статическая map не измеряет stack high-water/WCET. Release ELF: text104220B, data4356B, bss48920B. Образ SHA256 debug: `6b1d4c71e442a3d629d5cc2863dab8041fe8cbf00d9c2498d1f5bd54d46ef183`; release/C++26: `a27aebdcdc5a3056b19b12ca2ecf42dcefb19b32b5ebdc7ef8385457c420b4f2`. Изменение firmware/build inputs или deployment требует новой сборки и проверки fingerprint.
+Все четыре ARM ELF прошли hard-float/vector/feature/no-heap/no-exception/no-RWX проверки и согласование manifest. SRAM totals включают4096B резерва MSP; статическая map не измеряет stack high-water/WCET. Release ELF: text102404B, data4316B, bss48920B. Образ SHA256 debug: `16e9f847005b7c3ecffc176783d877461e166d7e8608e79c857d8be661f72742`; release/C++26: `7989144fa72522c13b2f1e6847aa88a32077171fca9c0b99fdb45ea3e2f7cecf`. Изменение firmware/build inputs или deployment требует новой сборки и проверки fingerprint.
 
-**Программный результат: PASS. Ввод в эксплуатацию робота: BLOCKED BY MISSING HARDWARE INFORMATION до подтверждения deployment и HIL.** Сборки выполнены с default uncommissioned profile: такой образ пригоден для безопасного чтения/диагностики после отдельной загрузки, но не разрешает arm. Это не проверенный профиль установленного робота.
+**Программный результат: PASS. Ввод в эксплуатацию робота: BLOCKED BY MISSING HARDWARE INFORMATION до подтверждения deployment и HIL.** Сборки выполнены с default и плановым8+8 uncommissioned profiles: такой образ пригоден для безопасного чтения/диагностики после отдельной загрузки, но не разрешает arm. Это не проверенный профиль установленного робота.
 
 ## Что проверяется программно
 
@@ -87,3 +88,9 @@ python3 tools/audit_sources.py --legacy-root ..
 Реестр [FUNCTIONAL_COVERAGE.md](FUNCTIONAL_COVERAGE.md)/[legacy_functions.csv](legacy_functions.csv) охватывает603 определения legacy; disabled examples, пустые функции и заменённая внутренняя glue logic выделяются отдельно. HARDWARE_TESTED требует протокола с версией платы/механики, firmware fingerprint, deployment, питанием, условиями, измерениями и оператором.
 
 Аудит SHA256 оригиналов/прямых копий/notice/явных секретов не является юридическим разрешением или гарантией отсутствия всех секретов. Инструкции подключения, самостоятельной прошивки и последующих тестов: [CONNECT_AND_FLASH.md](CONNECT_AND_FLASH.md), [MACOS_BOARD_TEST.md](MACOS_BOARD_TEST.md), [MAINTENANCE.md](MAINTENANCE.md). Их команды не выполняются установкой автоматически.
+
+## Проверки карты платы
+
+Девять новых GoogleTests проверяют28 GPIO,13 input aliases, PWM1…4 TIM4 CH4…1, нумерацию Stepper1 снизу,20 power bits +4 NRST и их непересечение, все8 пар нового профиля, физические биты каналов5…8 и OFF с сохранением NRST, независимость групп захватов0…3/4…7, запрет arm при неизвестных параметрах. Реальный adapter использует эти же таблицы из board_connectors.hpp. Новый preset stm32-board8-plan проверяет компиляцию настоящего make_deployment, а не только portable тест.
+
+Инвентаризация linked модулей воспроизводится tools/audit_elf_features.py и включена в полный validate. Она проверяет Debug, Release и board8-plan, пишет hashes ELF/MAP и списки символов в [elf-feature-audit.json](../artifacts/elf-feature-audit.json), завершает проверку ошибкой при отсутствии требуемой группы или найденном heap/exception/fake symbol.

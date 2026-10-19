@@ -48,7 +48,7 @@ MCU указан в `.uvprojx:17` обоих проектов; clocks — `Core/
 
 Рецепт 2025: `Core/OS_Tasks/gripper_task.c:39`. Профили 2026: `Core/OS_Tasks/gripper_task.c:138`; активные case — `:682`…`:1314`; homing — `Core/OS_Tasks/stepper_task.c:61`. Все углы, каналы, opcodes, фазы и ошибки разобраны в [GRIPPER_SCENARIOS.md](GRIPPER_SCENARIOS.md).
 
-**Открытые аппаратные вопросы:** main AX ID254 — broadcast, индивидуальный адрес неизвестен; насосы общие, независимые каналы 5–8 не подтверждены; неизвестны токи, бюджет питания, полярность клапанов, ход, реальные пределы и удержание груза при выключении stepper. Наличие сценария не отменяет эти блокировки профиля.
+**Открытые аппаратные вопросы:** main AX ID254 — broadcast, индивидуальный адрес неизвестен; legacy насосы общие; для новой установки8+8 задано PO1…PO16, но исполнение этого жгута не проверено; неизвестны токи, бюджет питания, полярность клапанов, ход, реальные пределы и удержание груза при выключении stepper. Наличие сценария не отменяет эти блокировки профиля.
 
 ## Транспорт, безопасность и RTOS
 
@@ -83,3 +83,14 @@ MCU указан в `.uvprojx:17` обоих проектов; clocks — `Core/
 Typed maintenance0x24 охватывает reset/cause, encoder ticks/path/reset, pose, AX/MX speed/LED/torque limit/mode/ID, Maxon range/ID, BMS ID/calibration/независимые чтения, L6474 registers/reset, PWM frequency, PCA controls, GPIO и приложение матча. Disarmed/owned/armed access не позволяет обходить safety gate. Полная таблица — [MAINTENANCE.md](MAINTENANCE.md).
 
 Установка: [INSTALL.md](INSTALL.md). История проверок: [TESTING.md](TESTING.md), [VALIDATION_REPORT.md](VALIDATION_REPORT.md). Образы должны соответствовать source/deployment fingerprint; автоматическая запись на устройство не выполнялась.
+
+## Присланная карта разъёмов
+
+| Функция | 2025 | 2026 | EUROBOT_NEXT | Проверка |
+|---|---|---|---|---|
+| GPIO/PWM/Stepper | Аппаратные макросы | Карта совпадает с изображениями владельца | Единый board_connectors.hpp используется STM32 adapter | BoardConnectors tests: все28GPIO,13input aliases, PWM4→1 и stepper1 снизу |
+|8 насосов +8 клапанов|Нельзя восстановить8 независимых из исходных маршрутов|Два gripper разделяют4 пары|Новая предписанная разводка PO1…PO16, отдельные logical0…3/4…7|BoardInstallation tests, ARM preset stm32-board8-plan; реальный жгут/токи ещё не проверены|
+| Сохранение NRST | Биты общего24-bit регистра | StopAll может сбрасывать лишние линии | Partition20PO+4NRST, power updates сохраняют NRST | Unit tests и linked firmware audit |
+| Разъём USART3 | Драйвер используетPD8/PD9 | То же; на присланном изображении USART3 не подписан | Драйвер сохранён; USART2 не переименован вUSART3 | Физическую связь DIO сUSART3 нужно установить по цепи |
+
+[BOARD_WIRING.md](BOARD_WIRING.md) содержит подключение каждого подтверждённого разъёма, [board_8_pumps.hpp](../examples/board_8_pumps.hpp) — заготовку нового deployment. Схема не задаёт допустимый ток, питание логики, модели/ID и механические пределы; они не подменяются тестовыми значениями.
