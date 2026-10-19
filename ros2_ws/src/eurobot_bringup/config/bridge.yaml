@@ -1,0 +1,11 @@
+/eurobot/eurobot_bridge:
+  ros__parameters:
+    # Replace with the stable serial-by-id path of the dedicated host-to-STM32 UART.
+    port: /dev/serial/by-id/CONFIGURE_ME
+    baud: 115200
+    ack_timeout_ms: 60
+    command_frame: base_link
+    # Raw legacy BMS current is unsigned; 0 publishes NaN until its direction is reviewed.
+    battery_current_sign: 0
+    # Explicit maintenance mutation/session enable; read-only queries remain available.
+    maintenance_enabled: false

@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>eurobot_hardware</name><version>0.1.0</version>
+  <description>Bounded serial transport and single-owner controller bridge</description>
+  <maintainer email="maintainer@example.invalid">Eurobot Next maintainers</maintainer>
+  <license>LicenseRef-Rights-Review-Required</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <depend>rclcpp</depend>
+  <depend>rclcpp_action</depend>
+  <depend>rcl_interfaces</depend>
+  <depend>std_srvs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>diagnostic_msgs</depend>
+  <depend>eurobot_interfaces</depend>
+
+  <test_depend>ament_cmake_pytest</test_depend>
+  <test_depend>rclpy</test_depend>
+  <test_depend>action_msgs</test_depend>
+  <test_depend>python3-pytest</test_depend>
+  <export><build_type>ament_cmake</build_type></export>
+</package>

@@ -1,0 +1,8 @@
+{
+  "cmake.useCMakePresets": "always",
+  "C_Cpp.default.compileCommands": "${workspaceFolder}/build/host/compile_commands.json",
+  "cmake.configureOnOpen": false,
+  "clangd.arguments": [
+    "--query-driver=**/arm-none-eabi-*"
+  ]
+}

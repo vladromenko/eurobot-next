@@ -1,0 +1,50 @@
+# Typed board/peripheral operations, never raw UART/register passthrough.
+uint8 BOARD_INFO=0
+uint8 BOARD_RESET=1
+uint8 CLEAR_RESET=2
+uint8 WHEEL_TICKS=3
+uint8 WHEEL_PATH=4
+uint8 RESET_WHEEL_TICKS=5
+uint8 SET_POSE=6
+uint8 SERVO_FEEDBACK=7
+uint8 SERVO_LED=8
+uint8 SERVO_SPEED=9
+uint8 SERVO_TORQUE_LIMIT=10
+uint8 SERVO_WHEEL_MODE=11
+uint8 SERVO_ID=12
+uint8 MOTOR_RANGE=13
+uint8 SET_MOTOR_RANGE=14
+uint8 SET_MOTOR_ID=15
+uint8 STEPPER_HARD_RESET=16
+uint8 PWM_INFO=17
+uint8 PWM_FREQUENCY=18
+uint8 GPIO=19
+uint8 BMS_CALIBRATION=20
+uint8 APPLICATION_SNAPSHOT=21
+uint8 MATCH_ARM=22
+uint8 MATCH_DISARM=23
+uint8 APPLICATION_MODE=24
+uint8 COMMUNICATION_ENABLED=25
+uint8 WHEELS_HOLDING=26
+uint8 DIAGNOSTIC_TEXT=27
+uint8 APPLICATION_EVENT=28
+uint8 BATTERY_ID=29
+uint8 BATTERY_VALUE=30
+uint8 DEVICE_PING=31
+uint8 PCA_CONTROL=32
+uint8 PCA_ALL_PULSE=33
+uint8 STEPPER_PARAMETER=34
+uint8 STEPPER_SET_PARAMETER=35
+# Zero is allowed only for read-only operations. Mutation requires current session token.
+uint32 control_token
+uint8 operation
+uint8 channel
+uint32 argument
+uint32 secondary
+float32[3] values
+---
+bool accepted
+uint8 error_code
+# Operation-specific validated response bytes, LE. Unknown/unavailable is not success.
+uint8[<=127] data
+string message

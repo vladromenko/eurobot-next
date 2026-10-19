@@ -1,0 +1,46 @@
+# Известные ограничения и ошибки
+
+## Препятствия для полной готовности робота
+
+| Пробел | Последствие | Что нужно для закрытия |
+|---|---|---|
+| Подтверждены 4 уникальных насоса, планируется 8+ | Насосы 5–8 нельзя включать по вымышленным выводам | Электрическая схема и явная привязка дополнительных каналов |
+| Питание/токи/полярность клапанов неизвестны | Маска ПО не доказывает допустимость комбинации нагрузок | Проверка силовой части, предохранителей, ЭДС, общего тока и safe valve state |
+| Неподтверждённые Dynamixel ID/модели | Возможен broadcast или движение другого узла | Инвентаризация по одному; source ID254 не назначается индивидуальному actuator в новом профиле |
+| Неизвестны физические пределы шасси/stepper/servo | Тестовые значения нельзя применять наугад | Измерение хода, тока/скорости и знаков; отдельная конфигурация |
+| Изменения после проверенного среза инвалидируют firmware fingerprint | Нельзя прошивать старый образ под новую конфигурацию | Свежий build и manifest; текущие проверки PASS приведены в VALIDATION_REPORT |
+| Соединение со стендом/контроллером и HIL не выполнялись | Boot, электрика и физическая остановка не проверены | Стендовая программа HARDWARE/CHASSIS/PUMPS; все HIL статусы открыты |
+| Права на приложение legacy не установлены | Оригиналы нельзя автоматически публиковать | Подтверждение лицензий/прав; legacy исходники за пределами нового репозитория |
+
+В текущих исходниках реализованы локальное приложение кнопок и99s match state, gripper jobs, source-style stepper ramp/homing, операции обслуживания0…35 и опциональный debug UART5. Текущий срез прошёл host/sanitizers/ARM/ROS проверки. Протокол и ограничения приведены в [VALIDATION_REPORT.md](VALIDATION_REPORT.md) и [TESTING.md](TESTING.md). Все HIL статусы остаются открытыми.
+
+Default deployment не разрешает arm: `commissioned=false`, неизвестные pump5…8, нулевые механические/силовые limits и непроверенные gripper bindings. Пример [legacy_2026_reference.hpp](../examples/legacy_2026_reference.hpp) сохраняет это состояние. Подтверждённые по исходникам IDs/геометрия/токи не доказывают установленное оборудование или допустимость этих токов. Неизвестные выводы, полярности, модель/ID вместо254 и power budget заполняются после проверки, а не случайными числами.
+
+UART5 PC12TX/PD2RX115200 по умолчанию выключен. При разрешении он использует новый framed protocol и общего owner с USART1, а не прежний raw DebugTask. Физический разъём неизвестен. Чтение application_state и raw GPIO различается; фильтрация выполняется с дискретностью Control10ms, без заявления о1ms измерении. Разрешённое обслуживание перечислено в [MAINTENANCE.md](MAINTENANCE.md).
+
+Match timeout отключает communication; `communication --arg 1 --allow-maintenance` только возвращает приём команд, без arm. После ESTOP требуется новая явная arm procedure. BOARD_RESET сначала останавливает устройства и выполняется только после полной передачи ACK; потерянный ACK оставляет результат неизвестным и не вызывает автоматический повтор. Программный reset не гарантирует удержание груза: необходима проверенная механическая/силовая политика.
+
+## Подтверждённые ошибки legacy
+
+| Ошибка | Источник | Требование к новой реализации |
+|---|---|---|
+| Локальный PumpOff вызывает SET и включает выходы | `2025 г./eurobot_2025_main_board-master/Core/App/terminal_cmd_handlers.c:226` | Единый PumpBank OFF без отдельного конфликтующего handler |
+| All-on перед маской даже при mask0 | `02_FIRMWARE_2026/SOURCE/Core/OS_Tasks/gripper_task.c:433` | Вычислять новое слово до единственного latch; не включать незатронутые каналы |
+| Оба gripper используют одни pump/valve пины | `02_FIRMWARE_2026/SOURCE/Core/OS_Tasks/gripper_task.c:138` | Проверять уникальность привязок; не заявлять 8 физических насосов |
+| Completion timeout игнорируется; success при COMM_ENABLE0 | `02_FIRMWARE_2026/SOURCE/Core/App/terminal_cmd_handlers.c:130`; `02_FIRMWARE_2026/SOURCE/Core/App/terminal_cmd_handlers.c:660` | Error/timeout/accepted различаются; transaction ID |
+| Payload индексируется без проверки длины | `02_FIRMWARE_2026/SOURCE/Core/App/terminal_cmd_handlers.c:660` | Проверка точной длины до разбора |
+| SyncWrite NULL dereference и лишняя итерация count-- | `02_FIRMWARE_2026/SOURCE/Core/Lib/dynamixel_master.c:157` | Bounded count loop, проверка размеров/ответов, broadcast без ожидания |
+| SPI shadow обновляется до синхронизации, общая шина без mutex | `02_FIRMWARE_2026/SOURCE/Core/BSP/spi_gpo.c:40` | Один владелец или полная блокировка транзакции с timeout |
+| Бесконечные yield/FIFO-full/SPI-flag ожидания | `02_FIRMWARE_2026/SOURCE/Core/Lib/maxon.c:38`; `02_FIRMWARE_2026/SOURCE/Core/BSP/spi_gpo.c:48` | Любое внешнее ожидание имеет deadline, ошибку и safe shutdown |
+| Watchdog не активен | `02_FIRMWARE_2026/SOURCE/Core/App/main.c:121` | IWDG после проверки heartbeat критических задач; тест отказа |
+| Torque/движения автоматически на boot | `02_FIRMWARE_2026/SOURCE/Core/OS_Tasks/gripper_task.c:71` | Safe init и explicit arm, никакого самопроизвольного homing |
+| I2C2 расчёт для 84 МГц при APB1 42 МГц | `02_FIRMWARE_2026/SOURCE/Core/BSP/board_hw_config.c:139` | Расчёт от фактического PCLK1, проверка осциллографом |
+| PLLQ4 даёт 84 МГц вместо 48 | `02_FIRMWARE_2026/SOURCE/Core/BSP/board_hw_config.c:86` | USB не использовать без правильного делителя/проверки |
+| StopAllActuators останавливает только stepper1, сбрасывает также NRST | `02_FIRMWARE_2026/SOURCE/Core/App/robot_behavior_routine.c:77` | Определённое состояние всех актуаторов и reserved bits |
+| Кнопочная queue отправляет без проверки результата | `02_FIRMWARE_2026/SOURCE/Core/OS_Tasks/buttons_poll_task.c:54` | Счётчик drop и latched critical inputs; не полагаться на одно событие |
+| Shared pose/command flags дают несогласованные снимки | `02_FIRMWARE_2026/SOURCE/Core/App/odometry.c:79`; `02_FIRMWARE_2026/SOURCE/Core/App/terminal_cmd_handlers.c:543` | Ownership/queue/snapshot, номер команды, отмена |
+| HSV и ряд Dynamixel команд пусты | `02_FIRMWARE_2026/SOURCE/Core/BSP/ws2812b.c:79`; `02_FIRMWARE_2026/SOURCE/Core/Lib/dynamixel_master.c:188` | Не объявлять покрытыми по прототипам |
+
+Замечания обоснованы исходниками; их проявление на роботе не измерялось. Исправление новым кодом подтверждается тестом, электрическое поведение — аппаратной проверкой. Программный stop не заменяет аппаратное размыкание питания.
+
+Критические fault handlers вызывают ограниченный локальный fail_safe; внешние UART-приводы не получают универсальной гарантии немедленного останова при CPU fault. Необработанный vendor IRQ может крутиться в Default_Handler до watchdog reset. Аппаратное отключение энергии обязательно проверяется отдельно.

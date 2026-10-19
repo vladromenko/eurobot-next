@@ -1,0 +1,10 @@
+# 0 requests a new session; the current token requests an idempotent arm result.
+# An active session rejects 0 and every other token.
+uint32 control_token
+# Explicit claim-only lease, without enabling outputs. Requires maintenance_enabled.
+# Release this session before acquiring a normal armed session.
+bool maintenance_session
+---
+bool accepted
+uint32 control_token
+string message

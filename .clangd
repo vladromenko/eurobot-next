@@ -1,0 +1,9 @@
+If:
+  PathMatch: firmware/(src/(stm32_board|main|runtime)\.cpp|include/FreeRTOSConfig\.h)
+CompileFlags:
+  CompilationDatabase: build/stm32-debug
+---
+If:
+  PathExclude: firmware/(src/(stm32_board|main|runtime)\.cpp|include/FreeRTOSConfig\.h)
+CompileFlags:
+  CompilationDatabase: build/host

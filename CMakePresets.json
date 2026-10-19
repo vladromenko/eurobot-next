@@ -1,0 +1,109 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 25,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "host",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/host",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "host-sanitize",
+      "inherits": "host",
+      "binaryDir": "${sourceDir}/build/host-sanitize",
+      "cacheVariables": {
+        "EUROBOT_SANITIZERS": "ON"
+      }
+    },
+    {
+      "name": "stm32-debug",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/stm32-debug",
+      "toolchainFile": "${sourceDir}/firmware/cmake/arm-none-eabi.cmake",
+      "cacheVariables": {
+        "EUROBOT_STM32": "ON",
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "stm32-release",
+      "inherits": "stm32-debug",
+      "binaryDir": "${sourceDir}/build/stm32-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "cxx26-probe",
+      "inherits": "host",
+      "binaryDir": "${sourceDir}/build/cxx26-probe",
+      "cacheVariables": {
+        "EUROBOT_EXPERIMENTAL_CXX26": "ON"
+      }
+    },
+    {
+      "name": "stm32-cxx26-probe",
+      "inherits": "stm32-release",
+      "binaryDir": "${sourceDir}/build/stm32-cxx26-probe",
+      "cacheVariables": {
+        "EUROBOT_EXPERIMENTAL_CXX26": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "host",
+      "configurePreset": "host"
+    },
+    {
+      "name": "host-sanitize",
+      "configurePreset": "host-sanitize"
+    },
+    {
+      "name": "stm32-debug",
+      "configurePreset": "stm32-debug"
+    },
+    {
+      "name": "stm32-release",
+      "configurePreset": "stm32-release"
+    },
+    {
+      "name": "cxx26-probe",
+      "configurePreset": "cxx26-probe"
+    },
+    {
+      "name": "stm32-cxx26-probe",
+      "configurePreset": "stm32-cxx26-probe"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "host",
+      "configurePreset": "host",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "host-sanitize",
+      "configurePreset": "host-sanitize",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "cxx26-probe",
+      "configurePreset": "cxx26-probe",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}

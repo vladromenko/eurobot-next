@@ -1,0 +1,11 @@
+# Token returned by the accepted Arm service for this session.
+uint32 control_token
+# Bits outside select must be zero; requests do not assert physical success.
+uint32 pumps_select
+uint32 pumps_values
+uint32 valves_select
+uint32 valves_values
+---
+bool accepted
+uint8 error_code
+string message

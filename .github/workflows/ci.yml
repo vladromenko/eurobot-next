@@ -1,0 +1,111 @@
+name: Build and verify
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  host:
+    name: C++23 host, sanitizers and static analysis
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Install build and analysis tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cmake ninja-build g++-13 libgtest-dev clang-19 clang-tidy-19 clang-format-19 python3
+      - name: Check formatting
+        run: CLANG_FORMAT=clang-format-19 tools/format.sh --check
+      - name: Configure host with ASan and UBSan
+        run: CXX=g++-13 cmake --preset host-sanitize
+      - name: Build host tests
+        run: cmake --build --preset host-sanitize --parallel 2
+      - name: Run CTest including serial PTY and mock programmer
+        run: ctest --preset host-sanitize
+      - name: Clang static analysis
+        run: CLANG_TIDY=clang-tidy-19 tools/static_analysis.sh --build-dir build/host-sanitize
+      - name: Parse Python tools
+        run: python3 -m compileall -q tools tests/flash_test.py
+
+  stm32:
+    name: STM32F407 ${{ matrix.preset }} ELF, HEX and BIN
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        preset: [stm32-debug, stm32-release]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Install build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cmake ninja-build curl xz-utils python3
+      - name: Install fixed Arm GNU 14.3.Rel1 from Arm
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive=arm-gnu-toolchain-14.3.rel1-x86_64-arm-none-eabi.tar.xz
+          release=https://developer.arm.com/-/media/Files/downloads/gnu/14.3.rel1/binrel
+          curl --fail --location --retry 3 --max-time 300 "$release/$archive" --output "$RUNNER_TEMP/$archive"
+          curl --fail --location --retry 3 --max-time 60 "$release/$archive.sha256asc" --output "$RUNNER_TEMP/$archive.sha256asc"
+          python3 - "$RUNNER_TEMP/$archive" "$RUNNER_TEMP/$archive.sha256asc" <<'PY'
+          import hashlib
+          from pathlib import Path
+          import re
+          import sys
+          archive=Path(sys.argv[1])
+          published=Path(sys.argv[2]).read_text()
+          found=re.findall(r'(?m)^([0-9a-fA-F]{64})\s+\*?'+re.escape(archive.name)+r'\s*$',published)
+          if len(found)!=1 or hashlib.sha256(archive.read_bytes()).hexdigest()!=found[0].lower():
+              raise SystemExit('Arm release SHA-256 verification failed')
+          PY
+          mkdir -p "$RUNNER_TEMP/arm-toolchain"
+          tar --extract --xz --file "$RUNNER_TEMP/$archive" --directory "$RUNNER_TEMP/arm-toolchain" --strip-components=1
+          echo "$RUNNER_TEMP/arm-toolchain/bin" >> "$GITHUB_PATH"
+      - name: Fetch pinned upstream dependencies with retained notices
+        run: tools/dependencies.sh
+      - name: Configure and build STM32
+        run: |
+          cmake --preset ${{ matrix.preset }}
+          cmake --build --preset ${{ matrix.preset }} --parallel 2
+      - name: Verify local image and manifest without hardware
+        run: tools/verify.sh --image build/${{ matrix.preset }}/firmware/eurobot_next.bin
+      - uses: actions/upload-artifact@v6
+        with:
+          name: eurobot-next-${{ matrix.preset }}
+          if-no-files-found: error
+          path: |
+            build/${{ matrix.preset }}/firmware/eurobot_next.elf
+            build/${{ matrix.preset }}/firmware/eurobot_next.hex
+            build/${{ matrix.preset }}/firmware/eurobot_next.bin
+            build/${{ matrix.preset }}/firmware/eurobot_next.map
+            build/${{ matrix.preset }}/firmware/eurobot_next.manifest.json
+
+  ros2:
+    name: ROS 2 ${{ matrix.distro }} build and tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        distro: [jazzy, lyrical]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Build rosidl, bridge, transport and ROS action tests in official ROS container
+        run: ros2_ws/tools/build_ros2.sh --docker --distro ${{ matrix.distro }}

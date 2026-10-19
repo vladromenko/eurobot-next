@@ -1,0 +1,6 @@
+<launch>
+  <arg name="config" default="$(find-pkg-share eurobot_bringup)/config/bridge.yaml"/>
+  <node pkg="eurobot_hardware" exec="eurobot_bridge" namespace="eurobot" name="eurobot_bridge" output="screen">
+    <param from="$(var config)"/>
+  </node>
+</launch>

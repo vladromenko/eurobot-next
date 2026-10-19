@@ -1,0 +1,26 @@
+# Token returned by the accepted Arm service for this session.
+uint32 control_token
+# IDs are actual device addresses/channels; units are explicit per kind.
+uint8 AX_POSITION=1
+uint8 MX_POSITION=2
+uint8 PCA_SERVO=3
+uint8 PWM_SERVO=4
+uint8 STEPPER_RELATIVE=5
+uint8 DC_DUTY=6
+uint8 AX_TORQUE=7
+uint8 MX_TORQUE=8
+uint8 LED_RGB=9
+uint8 RESET_RELATIVE_ODOMETRY=10
+uint8 STEPPER_HOME=11
+uint8 STEPPER_PROFILE_RELATIVE=12
+uint8 DC_BRAKE=13
+uint8 PWM_DUTY=14
+uint8 PWM_DISABLE=15
+uint8 kind
+uint8 id
+float32 value
+float32 rate
+---
+bool accepted
+uint8 error_code
+string message

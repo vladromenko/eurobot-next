@@ -1,0 +1,15 @@
+build/
+firmware/third_party/
+ros2_ws/build/
+ros2_ws/install/
+ros2_ws/log/
+.vscode/*.log
+__pycache__/
+*.pyc
+.DS_Store
+backups/
+CMakeUserPresets.json
+compile_commands.json
+artifacts/
+
+config/*_local.hpp
