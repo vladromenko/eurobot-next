@@ -7,6 +7,12 @@
 #include <cmath>
 namespace eurobot::board {
 inline constexpr auto output_bits = connectors::power_register_bits;
+enum class DeploymentMode : std::uint8_t { DIAGNOSTIC_MODE = 0, OPERATIONAL_MODE = 1 };
+enum class HardwareProfile : std::uint8_t {
+  CUSTOM = 0,
+  ROBOT_2025_HARDWARE_PROFILE = 1,
+  ROBOT_2026_SOURCE_PROFILE = 2
+};
 enum class DcMode : std::uint8_t { unconfigured, legacy_high_pair, coast_pwm };
 [[nodiscard]] inline std::optional<std::array<float, 2>> dc_pwm_pair(float duty,
                                                                      DcMode mode) noexcept {
@@ -21,6 +27,10 @@ enum class DcMode : std::uint8_t { unconfigured, legacy_high_pair, coast_pwm };
   return {};
 }
 struct Deployment {
+  DeploymentMode mode{DeploymentMode::DIAGNOSTIC_MODE};
+  HardwareProfile hardware_profile{HardwareProfile::CUSTOM};
+  std::uint16_t input_pulldown_mask{}; // InputBank indices; zero preserves no
+                                       // internal pull.
   bool commissioned{};
   std::uint8_t channels{8}, max_active{};
   std::array<std::uint8_t, 32> pump_outputs{1, 3, 5,
@@ -44,7 +54,8 @@ struct Deployment {
   std::array<bool, 4> stepper_enabled{};
   std::array<std::uint8_t, 4> stepper_current_tval{}, stepper_ocd_threshold{}, stepper_mode{};
   std::array<std::uint16_t, 4> stepper_driver_config{};
-  // Active final2026 initialization;255 leaves the reset TOFF_MIN of motors2..4 unchanged.
+  // Active final2026 initialization;255 leaves the reset TOFF_MIN of motors2..4
+  // unchanged.
   std::array<std::uint8_t, 4> stepper_alarm_enable{0x03, 0x87, 0x87, 0x87};
   std::array<std::uint8_t, 4> stepper_toff_min{0x1f, 255, 255, 255};
   std::uint32_t max_pump_on_ms{};
@@ -62,6 +73,9 @@ struct Deployment {
   std::array<bool, 4> stepper_profile_enabled{};
   std::array<devices::StepperProfile, 4> stepper_profiles{};
   bool valid() const noexcept {
+    if ((mode != DeploymentMode::DIAGNOSTIC_MODE && mode != DeploymentMode::OPERATIONAL_MODE) ||
+        (input_pulldown_mask & ~0x1fffU) != 0)
+      return false;
     if (!commissioned || channels < 8 || channels > 32 || max_active == 0 || max_active > channels)
       return false;
     if (leds_enabled && (led_count == 0 || led_count > 60)) {

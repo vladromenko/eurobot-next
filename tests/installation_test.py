@@ -74,11 +74,11 @@ class InstallationTests(unittest.TestCase):
             self.assertEqual(installer.main([]), 0)
             commands = [call.args[0] for call in run.call_args_list]
             self.assertEqual(len(commands), 3)
-            self.assertEqual(commands[0][:4], ['cmake', '--preset', 'stm32-robot2026', '--fresh'])
-            self.assertEqual(commands[1][:4], ['cmake', '--build', '--preset', 'stm32-robot2026'])
+            self.assertEqual(commands[0][:4], ['cmake', '--preset', 'stm32-diagnostic', '--fresh'])
+            self.assertEqual(commands[1][:4], ['cmake', '--build', '--preset', 'stm32-diagnostic'])
             self.assertEqual(commands[2][2], 'verify')
             self.assertTrue(commands[2][1].endswith('/tools/flash.py'))
-            self.assertTrue(commands[2][-1].endswith('/build/stm32-robot2026/firmware/eurobot_next.bin'))
+            self.assertTrue(commands[2][-1].endswith('/build/stm32-diagnostic/firmware/eurobot_next.bin'))
             self.assertNotIn('--allow-flash', [item for command in commands for item in command])
             self.assertTrue(all(call.kwargs == {'cwd': Path(directory), 'check': True} for call in run.call_args_list))
             self.assertFalse((Path(directory) / 'config').exists())
@@ -99,6 +99,15 @@ class InstallationTests(unittest.TestCase):
             self.assertEqual(flash[flash.index('--programmer') + 1], '/mock/programmer')
             self.assertFalse(any('erase' in argument or 'option' in argument or 'rdp' in argument.lower() for argument in flash))
 
+    def test_2026_saved_binding_never_changes_default_2025_selection(self):
+        with tempfile.TemporaryDirectory() as directory, mock.patch.object(installer, 'ROOT', Path(directory)):
+            installer.commands(installer.arguments(['--profile', 'robot2026', '--primary-servo-id', '42']))
+            default = installer.commands(installer.arguments([]))
+            self.assertEqual(default[0][2], 'stm32-diagnostic')
+            self.assertTrue(default[0][-1].endswith('/examples/diagnostic.hpp'))
+            with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+                installer.arguments(['--primary-servo-id', '42'])
+
     def test_failed_configure_stops_before_build_verify_or_flash(self):
         with tempfile.TemporaryDirectory() as directory, mock.patch.object(installer, 'ROOT', Path(directory)), \
                 mock.patch.object(installer.subprocess, 'run', side_effect=subprocess.CalledProcessError(1, ['cmake'])) as run, \
@@ -109,28 +118,28 @@ class InstallationTests(unittest.TestCase):
 
     def test_saved_local_identity_is_reused_on_later_installation(self):
         with tempfile.TemporaryDirectory() as directory, mock.patch.object(installer, 'ROOT', Path(directory)):
-            chosen = installer.commands(installer.arguments(['--primary-servo-id', '42']))
+            chosen = installer.commands(installer.arguments(['--profile', 'robot2026', '--primary-servo-id', '42']))
             saved = Path(directory) / 'config/robot_2026_local.hpp'
             self.assertIn('robot_2026(42)', saved.read_text())
-            later = installer.commands(installer.arguments([]))
+            later = installer.commands(installer.arguments(['--profile', 'robot2026']))
             self.assertEqual(chosen[0], later[0])
             self.assertIn('-DEUROBOT_BOARD_CONFIG=' + str(saved), later[0])
 
     def test_additional_motor_option_alias_preserves_existing_cli(self):
-        self.assertEqual(installer.arguments(['--additional-main-servo-id', '42']).primary_servo_id, 42)
-        self.assertEqual(installer.arguments(['--primary-servo-id', '42']).primary_servo_id, 42)
+        self.assertEqual(installer.arguments(['--profile', 'robot2026', '--additional-main-servo-id', '42']).primary_servo_id, 42)
+        self.assertEqual(installer.arguments(['--profile', 'robot2026', '--primary-servo-id', '42']).primary_servo_id, 42)
 
     def test_invalid_and_already_assigned_primary_ids_rejected(self):
         for value in (0, 254, 255, -1, *sorted(installer.KNOWN_IDS)):
             with self.subTest(primary=value), redirect_stderr(io.StringIO()):
                 with self.assertRaises(SystemExit) as stopped:
-                    installer.arguments(['--primary-servo-id', str(value)])
+                    installer.arguments(['--profile', 'robot2026', '--primary-servo-id', str(value)])
                 self.assertEqual(stopped.exception.code, 2)
 
     def test_individually_chosen_primary_generates_only_local_config_under_mock_root(self):
         with tempfile.TemporaryDirectory() as directory, mock.patch.object(installer, 'ROOT', Path(directory)), \
                 mock.patch.object(installer.subprocess, 'run') as run, redirect_stdout(io.StringIO()):
-            self.assertEqual(installer.main(['--primary-servo-id', '42']), 0)
+            self.assertEqual(installer.main(['--profile', 'robot2026', '--primary-servo-id', '42']), 0)
             local = Path(directory) / 'config/robot_2026_local.hpp'
             self.assertEqual(local.read_text(), '#pragma once\n#include "eurobot/robot_2026.hpp"\n'
                              'inline eurobot::board::Deployment make_deployment() {\n'

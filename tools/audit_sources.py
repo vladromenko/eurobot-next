@@ -45,7 +45,7 @@ def run() -> int:
         'AWS access key': re.compile(rb'(?:AKIA|ASIA)[A-Z0-9]{16}'),
         'OpenAI token': re.compile(rb'sk-(?:proj-|svcacct-)?[A-Za-z0-9_-]{40,}'),
     }
-    ignored_dirs = {'.git', 'build', 'install', 'log', '__pycache__', '.cache', 'node_modules'}
+    ignored_dirs = {'.git', 'build', 'install', 'log', '__pycache__', '.cache', 'node_modules', 'RELEASE_PACKAGE'}
     own_extensions = {'.cpp', '.hpp', '.c', '.h', '.s', '.S'}
     scanned = 0
     for path in sorted(project.rglob('*')):

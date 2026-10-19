@@ -315,7 +315,8 @@ Error Chassis::tick(std::uint32_t now) noexcept {
   const auto angular_maximum = config_.max_angular_accel_radps2 * dt;
   const auto angular_scale =
       angle_distance > angular_maximum ? angular_maximum / angle_distance : 1.0F;
-  // One interpolation factor preserves the convex wheel limits as well as both acceleration bounds.
+  // One interpolation factor preserves the convex wheel limits as well as both
+  // acceleration bounds.
   const auto scale = std::min(linear_scale, angular_scale);
   next.vx += dx * scale;
   next.vy += dy * scale;
@@ -399,8 +400,8 @@ Error Chassis::feedback(const std::array<std::int32_t, 3> &tpm,
   }
   state_.measured = *speed;
   state_.pose = {x, y, yaw};
-  // A relative origin is defined by the first valid sample; failed samples invalidate its
-  // certainty.
+  // A relative origin is defined by the first valid sample; failed samples
+  // invalidate its certainty.
   return Error::ok;
 }
 bool Pid::valid() const noexcept {
@@ -426,7 +427,8 @@ std::optional<float> Pid::update(float target, float measured, float dt) noexcep
   if (!std::isfinite(error) || !std::isfinite(derivative) || !std::isfinite(raw)) {
     return std::nullopt;
   }
-  // Conditional integration: permit unwinding, forbid integration deeper into saturation.
+  // Conditional integration: permit unwinding, forbid integration deeper into
+  // saturation.
   if ((raw <= config_.output_max || error < 0) && (raw >= config_.output_min || error > 0)) {
     integral_ = candidate;
   }
@@ -439,6 +441,11 @@ std::optional<float> Pid::update(float target, float measured, float dt) noexcep
   return std::clamp(output, config_.output_min, config_.output_max);
 }
 Error Controller::stop_all() noexcept {
+  // A diagnostic controller never armed its actuator backends. Only the local
+  // board shutdown is permitted; do not fabricate serial zero-command
+  // acknowledgements.
+  if (arm_inhibited_)
+    return auxiliary_.stop ? auxiliary_.stop(auxiliary_.context) : Error::ok;
   const auto pumps = pumps_.stop(), chassis = chassis_.stop();
   const auto auxiliary = auxiliary_.stop ? auxiliary_.stop(auxiliary_.context) : Error::ok;
   return succeeded(pumps) && succeeded(chassis) && succeeded(auxiliary) ? Error::ok
@@ -450,7 +457,8 @@ Error Controller::initialize(std::uint32_t now) noexcept {
   state_.estop = latched_estop;
   initialized_ = false;
   const auto stopped = stop_all();
-  const auto p = pumps_.initialize(now), c = chassis_.initialize(now);
+  const auto p = arm_inhibited_ ? Error::ok : pumps_.initialize(now),
+             c = arm_inhibited_ ? Error::ok : chassis_.initialize(now);
   initialized_ = succeeded(stopped) && succeeded(p) && succeeded(c);
   state_.fault = !initialized_;
   state_.last_error = !succeeded(stopped) ? stopped : (!succeeded(p) ? p : c);
@@ -511,6 +519,8 @@ Error Controller::authorize(std::uint32_t owner, std::uint32_t sequence, std::ui
   return Error::ok;
 }
 Error Controller::rearm(std::uint32_t owner, std::uint32_t sequence, std::uint32_t now) noexcept {
+  if (arm_inhibited_)
+    return Error::not_armed;
   const auto authorized = authorize(owner, sequence, now, false);
   if (!succeeded(authorized)) {
     return authorized;
@@ -714,7 +724,8 @@ std::optional<Frame> FrameParser::push(std::uint8_t byte, std::uint32_t now) noe
   return frame;
 }
 Frame Dispatcher::dispatch(const Frame &request, std::uint32_t now) noexcept {
-  // Expiration is processed before every request; status reads cannot preserve stale outputs.
+  // Expiration is processed before every request; status reads cannot preserve
+  // stale outputs.
   const auto prior_tick = controller_.tick(now);
   (void)prior_tick;
   if (request.type >= 0x21 && request.type <= 0x24) {
@@ -803,52 +814,52 @@ Frame Dispatcher::dispatch(const Frame &request, std::uint32_t now) noexcept {
   if (gate != Error::ok) {
     error = gate;
   } else if (request.length <= max_payload) {
-    switch (static_cast<Type>(request.type)) {
-    case Type::claim:
+    switch (request.type) {
+    case static_cast<std::uint8_t>(Type::claim):
       if (request.length == 4) {
         error = controller_.claim(owner, seq, read_u32(data), now);
       }
       break;
-    case Type::rearm:
+    case static_cast<std::uint8_t>(Type::rearm):
       if (request.length == 0) {
         error = controller_.rearm(owner, seq, now);
       }
       break;
-    case Type::heartbeat:
+    case static_cast<std::uint8_t>(Type::heartbeat):
       if (request.length == 0) {
         error = controller_.heartbeat(owner, seq, now);
       }
       break;
-    case Type::pumps:
+    case static_cast<std::uint8_t>(Type::pumps):
       if (request.length == 16) {
         error = controller_.pumps(owner, seq, read_u32(data), read_u32(data + 4),
                                   read_u32(data + 8), read_u32(data + 12), now);
       }
       break;
-    case Type::twist:
+    case static_cast<std::uint8_t>(Type::twist):
       if (request.length == 12) {
         error = controller_.velocity(owner, seq,
                                      {read_f32(data), read_f32(data + 4), read_f32(data + 8)}, now);
       }
       break;
-    case Type::estop:
+    case static_cast<std::uint8_t>(Type::estop):
       if (request.length == 0) {
         error = controller_.emergency_stop();
       }
       break;
-    case Type::release:
+    case static_cast<std::uint8_t>(Type::release):
       if (request.length == 0) {
         error = controller_.release(owner, seq, now);
       }
       break;
-    case Type::sensors:
+    case static_cast<std::uint8_t>(Type::sensors):
       break; // handled by read-only extension above
-    case Type::status:
+    case static_cast<std::uint8_t>(Type::status):
       if (request.length == 0) {
         error = Error::ok;
       }
       break;
-    case Type::actuator:
+    case static_cast<std::uint8_t>(Type::actuator):
       error = controller_.authorize(owner, seq, now);
       if (succeeded(error)) {
         error = extension_.command

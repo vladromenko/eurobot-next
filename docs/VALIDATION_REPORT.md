@@ -1,8 +1,8 @@
 # EUROBOT NEXT — результаты проверки
 
-Статус: **READY FOR HARDWARE VALIDATION** для первого испытания логики/связи с отключёнными нагрузками. Диагностические presets не arm; новый stm32-robot2026 содержит настроенный по источникам рабочий профиль и требует явного arm. Main0 и связанные рецепты работают через112 с проверкой его положения; бывший слот254 неактивен. Физическая работа робота требует стендовой проверки.
+Статусы: **SOFTWARE_READY / READY_FOR_DIAGNOSTIC_FLASH** для первого запуска с отключёнными нагрузками. Плата одинакова для2025/2026; год старого образа не определяет подключённые устройства. По умолчанию выбирается stm32-diagnostic / DIAGNOSTIC_MODE без движения и автоматических запросов внешним устройствам. OPERATIONAL_MODE требует отдельного проверенного профиля и arm; HARDWARE_CONFIGURATION_REQUIRED / HARDWARE_TEST_REQUIRED остаются открытыми.
 
-Дата: 2026-10-19T04:24:39.655503+03:00 (Europe/Moscow). Итог свежего прогона: **PASS**.
+Дата: 2026-10-19T11:37:42.955528+03:00 (Europe/Moscow). Итог свежего прогона: **PASS**.
 
 [Машинный результат и журналы](../artifacts/validation/results.json). Source fingerprint фиксирует firmware, ROS, тесты, инструменты и примеры. Журналы/образы исключены из Git; они доступны в локальном проекте.
 
@@ -35,6 +35,18 @@
 | configure_stm32-robot2026 | PASS | [configure_stm32-robot2026.log](../artifacts/validation/configure_stm32-robot2026.log) |
 | build_stm32-robot2026 | PASS | [build_stm32-robot2026.log](../artifacts/validation/build_stm32-robot2026.log) |
 | verify_stm32-robot2026 | PASS | [verify_stm32-robot2026.log](../artifacts/validation/verify_stm32-robot2026.log) |
+| configure_stm32-robot2025-debug | PASS | [configure_stm32-robot2025-debug.log](../artifacts/validation/configure_stm32-robot2025-debug.log) |
+| build_stm32-robot2025-debug | PASS | [build_stm32-robot2025-debug.log](../artifacts/validation/build_stm32-robot2025-debug.log) |
+| verify_stm32-robot2025-debug | PASS | [verify_stm32-robot2025-debug.log](../artifacts/validation/verify_stm32-robot2025-debug.log) |
+| configure_stm32-robot2025 | PASS | [configure_stm32-robot2025.log](../artifacts/validation/configure_stm32-robot2025.log) |
+| build_stm32-robot2025 | PASS | [build_stm32-robot2025.log](../artifacts/validation/build_stm32-robot2025.log) |
+| verify_stm32-robot2025 | PASS | [verify_stm32-robot2025.log](../artifacts/validation/verify_stm32-robot2025.log) |
+| configure_stm32-diagnostic-debug | PASS | [configure_stm32-diagnostic-debug.log](../artifacts/validation/configure_stm32-diagnostic-debug.log) |
+| build_stm32-diagnostic-debug | PASS | [build_stm32-diagnostic-debug.log](../artifacts/validation/build_stm32-diagnostic-debug.log) |
+| verify_stm32-diagnostic-debug | PASS | [verify_stm32-diagnostic-debug.log](../artifacts/validation/verify_stm32-diagnostic-debug.log) |
+| configure_stm32-diagnostic | PASS | [configure_stm32-diagnostic.log](../artifacts/validation/configure_stm32-diagnostic.log) |
+| build_stm32-diagnostic | PASS | [build_stm32-diagnostic.log](../artifacts/validation/build_stm32-diagnostic.log) |
+| verify_stm32-diagnostic | PASS | [verify_stm32-diagnostic.log](../artifacts/validation/verify_stm32-diagnostic.log) |
 | linked_features | PASS | [linked_features.log](../artifacts/validation/linked_features.log) |
 | configure_cxx26-probe | PASS | [configure_cxx26-probe.log](../artifacts/validation/configure_cxx26-probe.log) |
 | build_cxx26-probe | PASS | [build_cxx26-probe.log](../artifacts/validation/build_cxx26-probe.log) |
@@ -53,11 +65,15 @@
 
 | Preset | BIN/Flash байт | SRAM байт | SHA256 BIN |
 |---|---:|---:|---|
-| stm32-debug | 144052 | 53272 | `44d75d7a3e8cbaaadff5e66b51fcc10360a67d9022e6f252792c4ec5a2c5829f` |
-| stm32-release | 107176 | 53272 | `92ae3bbbfe3fd86c5960258c1bec2d933dc27e07b33bf564565911ce5c8311ae` |
-| stm32-board8-plan | 105496 | 53280 | `2fb1897a2fe26d8d146e75c848255dad36d84c64e7086338ef75cd9a8400c186` |
-| stm32-robot2026 | 106448 | 53280 | `55701a648c07f6ee9d9690439a48fd5488c4c8f213f6d11f4f7c363e7e4d6391` |
-| stm32-cxx26-probe | 107176 | 53272 | `92ae3bbbfe3fd86c5960258c1bec2d933dc27e07b33bf564565911ce5c8311ae` |
+| stm32-debug | 145268 | 53272 | `04d7ca84c638f7cd97c70b9b5921f54af519b357f260cf86ed4602d7bc5578f9` |
+| stm32-release | 108056 | 53272 | `4c09110c83ad26c50d070ebbd7e11e926c36f096aad3d8563186dc7710eb1feb` |
+| stm32-board8-plan | 106384 | 53280 | `d5c23207f4c1ccc7352ea0b830f37a8b3d5e785b545d716eca1028be9640bf65` |
+| stm32-robot2026 | 107344 | 53280 | `0632b6d4fd779cb93d2527fb2dede412b3a02f2304bee021ec8dcf85972f0513` |
+| stm32-robot2025-debug | 144072 | 53280 | `f834963448da409e05aed8256b83bfb24a166d17bc3b449dfa77fbc9cf00d54b` |
+| stm32-robot2025 | 105152 | 53280 | `6cccfbd418a1d5f936fee7ed5e0bc16c242a4cec376ebbdf0cf8492221b554ea` |
+| stm32-diagnostic-debug | 142776 | 53280 | `812812a6c80963489934f0180b796d4583c34b0330c03f4320df6094882f9ae2` |
+| stm32-diagnostic | 104880 | 53280 | `354b715d288edc206874d20d1cff9ac129fb3e1034f09f2b56a9a1ae48859548` |
+| stm32-cxx26-probe | 108056 | 53272 | `4c09110c83ad26c50d070ebbd7e11e926c36f096aad3d8563186dc7710eb1feb` |
 
 ## ROS 2
 
@@ -74,7 +90,7 @@
 
 ## Аппаратные ограничения
 
-Реальные SWD connect/read/flash, STM32 boot, UART робота и движения НЕ выполнялись. Default deployment намеренно не вооружается. Отдельный stm32-robot2026 автоматически заполняет известные параметры2026 и явные новые программные ограничения; он пригоден для последующих поэтапных испытаний с явным arm. Его параметры не объявляются аппаратными измерениями. До нагрузок сверяются штатное питание/MCU, проводка PO1…PO16, физический USART3/DIO и соответствие установленных servo source-карте. Main0 настроен на112; неизвестный второй адрес для его выполнения не требуется. Концевик switch2 задаёт ноль0, отрицательный seek−100000 не принимается за координату нуля. После снятия тока lift требуется новое home. Подробные источники, политики и исключения: [ROBOT_2026_PROFILE.md](ROBOT_2026_PROFILE.md). Для16/32 физических насосов с клапанами требуется подходящий расширенный output backend: известная исходная плата имеет20 силовых выходов; универсальные32-битные маски не добавляют выводы.
+Реальные SWD connect/read/flash, STM32 boot, UART робота и движения НЕ выполнялись. Основной образ для владельца — stm32-diagnostic в DIAGNOSTIC_MODE; он не предполагает конкретный жгут2025/2026 и не назначает насосы2026 автоматически. Подробная инструкция: [WHAT_I_NEED_TO_DO.md](../WHAT_I_NEED_TO_DO.md). Default deployment намеренно не вооружается. Отдельный stm32-robot2026 автоматически заполняет известные параметры2026 и явные новые программные ограничения; он пригоден для последующих поэтапных испытаний с явным arm. Его параметры не объявляются аппаратными измерениями. До нагрузок сверяются штатное питание/MCU, проводка PO1…PO16, физический USART3/DIO и соответствие установленных servo source-карте. Main0 настроен на112; неизвестный второй адрес для его выполнения не требуется. Концевик switch2 задаёт ноль0, отрицательный seek−100000 не принимается за координату нуля. После снятия тока lift требуется новое home. Подробные источники, политики и исключения: [ROBOT_2026_PROFILE.md](ROBOT_2026_PROFILE.md). Для16/32 физических насосов с клапанами требуется подходящий расширенный output backend: известная исходная плата имеет20 силовых выходов; универсальные32-битные маски не добавляют выводы.
 
 После конфигурации: питание логики без нагрузок → SWD identity/backup/flash/readback → ручной reset после halt → UART status/sensors/maintenance readonly → проверка safe boot и сигналов → по одному механизму с ограничением энергии → потеря связи/ESTOP → ROS. Подробно: [CONNECT_AND_FLASH.md](CONNECT_AND_FLASH.md), [MACOS_BOARD_TEST.md](MACOS_BOARD_TEST.md), [FLASH_UBUNTU.md](FLASH_UBUNTU.md).
 

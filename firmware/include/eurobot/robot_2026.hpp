@@ -12,6 +12,8 @@ namespace eurobot::board {
 // measured mechanical stops and electrical ratings.
 [[nodiscard]] inline Deployment robot_2026(std::uint8_t primary_main_id = 255) {
   auto config = eight_pump_installation();
+  config.mode = DeploymentMode::OPERATIONAL_MODE;
+  config.hardware_profile = HardwareProfile::ROBOT_2026_SOURCE_PROFILE;
   // This profile has been reviewed against the 2026 sources. The flag selects
   // this complete software configuration; physical acceptance remains separate.
   config.commissioned = true;
@@ -50,12 +52,14 @@ namespace eurobot::board {
     grip.maximum_height_mm = source_2026::lift_command_max_height_mm;
     grip.minimum_lift_steps = 0;
     grip.maximum_lift_steps = source_2026::lift_command_max_steps;
-    // Match the source disable behaviour. The stricter reference policy requires
-    // a new finite home after torque removal, rather than trusting an unpowered lift.
+    // Match the source disable behaviour. The stricter reference policy
+    // requires a new finite home after torque removal, rather than trusting an
+    // unpowered lift.
     grip.disable_lift_after_move = true;
     grip.composite = gripper::Composite::base_strategy_2026;
     // NEW explicit recipe replaces malformed old one-byte SimpleMove calls.
-    // Speed is existing2026 Mac console default; durations follow BT's2500ms waits.
+    // Speed is existing2026 Mac console default; durations follow BT's2500ms
+    // waits.
     grip.capture_axis = 1;
     grip.capture_forward_mps = 0.12F;
     grip.capture_backward_mps = 0.12F;
@@ -73,7 +77,8 @@ namespace eurobot::board {
     config.servo_min_deg[primary_main_id] = 0;
     config.servo_max_deg[primary_main_id] = 300;
   }
-  // Default main0 recipes address and verify112, never the inactive source254 slot.
+  // Default main0 recipes address and verify112, never the inactive source254
+  // slot.
   return config;
 }
 } // namespace eurobot::board

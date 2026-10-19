@@ -34,6 +34,7 @@ void clear_reset_cause() noexcept;
 [[nodiscard]] Error dc_brake(std::uint8_t channel, bool high, std::uint32_t frequency) noexcept;
 [[nodiscard]] Error dc_drive(std::uint8_t channel, float duty, DcMode mode,
                              std::uint32_t frequency_hz) noexcept;
+[[nodiscard]] Error set_input_pulldowns(std::uint16_t mask) noexcept;
 [[nodiscard]] bool input(std::uint8_t index) noexcept;
 void stepper_service(void *context, Error (*tick)(void *, std::uint32_t)) noexcept;
 void stepper_irq(bool enabled) noexcept;

@@ -100,11 +100,20 @@ public:
     return error;
   }
   static Error step_delay(void *, std::uint32_t us) { return board::delay_us(us); }
+  bool diagnostic() const { return config.mode != board::DeploymentMode::OPERATIONAL_MODE; }
   Error initialize() {
     startup_ready = false;
+    const auto pulls = board::set_input_pulldowns(config.input_pulldown_mask);
+    if (pulls != Error::ok)
+      return pulls;
     auto safe = stop();
     if (safe != Error::ok) {
       return safe;
+    }
+    if (diagnostic()) {
+      startup_ready = true;
+      return Error::ok; // Missing external devices and unreviewed motion limits
+                        // are expected.
     }
     if (!config.valid()) {
       return Error::invalid_config;
@@ -116,12 +125,15 @@ public:
       }
       pca_ready = true;
     }
-    // NRST remains asserted until a validated, armed stepper command requests preparation.
+    // NRST remains asserted until a validated, armed stepper command requests
+    // preparation.
     startup_ready = true;
     return Error::ok;
   }
   static Error write_outputs(void *context, std::uint32_t pumps, std::uint32_t valves) {
     auto &h = *static_cast<Hardware *>(context);
+    if (h.diagnostic())
+      return Error::not_armed;
     if (!h.startup_ready || !h.config.valid()) {
       const auto safe = board::shift_write(0);
       if (safe == Error::ok) {
@@ -141,6 +153,8 @@ public:
   }
   static Error write_wheels(void *context, const std::array<std::int32_t, 3> &values) {
     auto &h = *static_cast<Hardware *>(context);
+    if (h.diagnostic())
+      return Error::not_armed;
     bool moving = false;
     for (auto value : values) {
       moving = moving || value != 0;
@@ -174,8 +188,11 @@ public:
     if (stopped != Error::ok) {
       return stopped;
     }
-    // A failed startup cannot be cleared by a transport rearm that only writes safe zeros.
-    return hardware.startup_ready && hardware.config.valid() ? Error::ok : Error::invalid_config;
+    // A failed startup cannot be cleared by a transport rearm that only writes
+    // safe zeros.
+    return hardware.startup_ready && (hardware.diagnostic() || hardware.config.valid())
+               ? Error::ok
+               : Error::invalid_config;
   }
   Error stop() {
     if (gripper_engine && gripper_engine->busy()) {
@@ -186,7 +203,8 @@ public:
               : (controller && controller->state().fault ? controller->state().last_error
                                                          : Error::not_armed);
       (void)gripper_engine->abort(reason);
-      // abort invokes job_stop synchronously after publishing its terminal state.
+      // abort invokes job_stop synchronously after publishing its terminal
+      // state.
       return gripper_engine->state().stop_error;
     }
     Error result = Error::ok;
@@ -202,10 +220,11 @@ public:
     {
       StepGuard lock;
       for (std::size_t i = 0; i < planners.size(); ++i) {
-        if (planners[i].stop() != Error::ok) {
+        if (!diagnostic() && planners[i].stop() != Error::ok) {
           result = Error::output_failure;
         }
-        // Removing holding torque can move the mechanism. A new home is mandatory after stop.
+        // Removing holding torque can move the mechanism. A new home is
+        // mandatory after stop.
         planners[i] = StepperPlanner{config.steppers[i], board::stepper_pulses(i)};
       }
     }
@@ -215,7 +234,7 @@ public:
     if (board::shift_write(0) != Error::ok) {
       result = Error::output_failure;
     }
-    if (write_wheels(this, {}) != Error::ok) {
+    if (!diagnostic() && write_wheels(this, {}) != Error::ok) {
       result = Error::output_failure;
     }
     for (std::uint8_t i = 0; i < 8; ++i) {
@@ -224,14 +243,14 @@ public:
       }
     }
     for (std::size_t id = 1; id < config.ax_ids.size(); ++id) {
-      if (config.ax_ids[id] || config.mx_ids[id]) {
+      if (!diagnostic() && (config.ax_ids[id] || config.mx_ids[id])) {
         const std::array<std::uint8_t, 1> off{0};
         if (servo_protocol.write(static_cast<std::uint8_t>(id), 0x18, off) != Error::ok) {
           result = Error::output_failure;
         }
       }
     }
-    if (config.pca_enabled && pca.full_off() != Error::ok) {
+    if (!diagnostic() && config.pca_enabled && pca.full_off() != Error::ok) {
       pca_ready = false;
       result = Error::output_failure;
     }
@@ -287,6 +306,8 @@ public:
   }
   static Error step_tick(void *context, std::uint32_t now) {
     auto &hardware = *static_cast<Hardware *>(context);
+    if (hardware.diagnostic())
+      return Error::ok;
     Error result = Error::ok;
     for (std::size_t i = 0; i < 4; ++i) {
       if (hardware.config.stepper_enabled[i]) {
@@ -373,7 +394,7 @@ public:
     auto &hardware = *static_cast<Hardware *>(context);
     std::fill_n(output.begin(), 24, 0);
     Error battery_error = Error::unsupported;
-    if (hardware.config.battery_enabled) {
+    if (!hardware.diagnostic() && hardware.config.battery_enabled) {
       if (hardware.config.battery_id == 0 || hardware.config.battery_id >= 254) {
         battery_error = Error::invalid_config;
       } else {
@@ -409,11 +430,13 @@ public:
     output[22] = 0x1f;
     output[23] = static_cast<std::uint8_t>(battery_error);
     count = 24;
-    return Error::ok; // Optional BMS failure does not fabricate battery feedback or fault unrelated
-                      // actuators.
+    return Error::ok; // Optional BMS failure does not fabricate battery
+                      // feedback or fault unrelated actuators.
   }
   static Error actuator(void *context, std::span<const std::uint8_t> bytes, std::uint32_t now) {
     auto &h = *static_cast<Hardware *>(context);
+    if (h.diagnostic())
+      return Error::not_armed;
     if (bytes.size() != 10) {
       return Error::invalid_argument;
     }
@@ -557,8 +580,8 @@ public:
       if (error != Error::ok) {
         (void)h.step_driver[id].enable(false);
       }
-      // Finite stepper/home commands have their own 10s deadline; lease loss still stops all
-      // outputs.
+      // Finite stepper/home commands have their own 10s deadline; lease loss
+      // still stops all outputs.
     } else if (kind == 6) {
       if (id >= 4 || !h.config.dc_channels[id]) {
         return Error::unsupported;
@@ -619,6 +642,8 @@ public:
   }
   static Error job_guard(void *context, std::uint32_t owner, std::uint32_t now) {
     auto &h = *static_cast<Hardware *>(context);
+    if (h.diagnostic())
+      return Error::not_armed;
     if (!h.controller || !h.startup_ready || !h.config.valid()) {
       return Error::invalid_config;
     }
@@ -780,6 +805,8 @@ public:
   }
   static Error job_issue(void *context, const gripper::Step &step, std::uint32_t now) {
     auto &h = *static_cast<Hardware *>(context);
+    if (h.diagnostic())
+      return Error::not_armed;
     using enum gripper::Action;
     if (step.action == chassis_stop) {
       return h.chassis->stop();
@@ -943,7 +970,8 @@ public:
                 ? d.heading_kp * std::remainder(h.motion_origin.yaw - state.pose.yaw, 6.283185307F)
                 : d.lateral_kp * std::atan(std::clamp(-local_x / std::max(std::fabs(error), 0.05F),
                                                       -0.8F, 0.8F));
-        // Translation is expressed in the axis frame captured at the start of this segment.
+        // Translation is expressed in the axis frame captured at the start of
+        // this segment.
         const float relative_yaw = h.motion_origin.yaw - state.pose.yaw;
         const float vx0 = d.axis == 0 ? translation : 0, vy0 = d.axis == 1 ? translation : 0;
         velocity = {vx0 * std::cos(relative_yaw) - vy0 * std::sin(relative_yaw),
@@ -980,7 +1008,8 @@ public:
         if (stopped != Error::ok) {
           return stopped;
         }
-        // Timed motion proves bounded command execution; measured modes additionally wait for rest.
+        // Timed motion proves bounded command execution; measured modes
+        // additionally wait for rest.
         completion.done = step.action == timed_drive ||
                           (h.chassis->state().measured_known == 7 &&
                            h.chassis->state().wheel_measured == std::array<std::int32_t, 3>{});
@@ -1043,8 +1072,9 @@ public:
     if (guard != Error::ok) {
       return guard;
     }
-    // The complete accepted plan owns these resources, including an existing hold that a
-    // later step replaces. It never enables an inactive servo or an unrelated channel.
+    // The complete accepted plan owns these resources, including an existing
+    // hold that a later step replaces. It never enables an inactive servo or an
+    // unrelated channel.
     for (std::size_t i = 0; i < job_servos.size(); ++i) {
       if (job_servos[i] && servo_deadlines[i].active) {
         servo_deadlines[i].command_at = now;
@@ -1099,6 +1129,16 @@ public:
   static Error command_guard(void *context, std::uint8_t type,
                              std::span<const std::uint8_t> payload) {
     const auto &h = *static_cast<Hardware *>(context);
+    if (h.diagnostic()) {
+      if (type == static_cast<std::uint8_t>(wire::Type::rearm) ||
+          type == static_cast<std::uint8_t>(wire::Type::twist) ||
+          type == static_cast<std::uint8_t>(wire::Type::pumps) ||
+          type == static_cast<std::uint8_t>(wire::Type::actuator) || type == 0x21 || type == 0x23)
+        return Error::not_armed;
+      if (type == 0x24 && !payload.empty() &&
+          maintenance::access(payload[0]) != maintenance::Access::read_only)
+        return Error::not_armed;
+    }
     if (h.reset_pending) {
       return Error::not_armed;
     }
@@ -1213,6 +1253,8 @@ public:
       return Error::malformed;
     }
     const auto operation = static_cast<maintenance::Operation>(input[0]);
+    if (h.diagnostic() && maintenance::access(input[0]) != maintenance::Access::read_only)
+      return Error::not_armed;
     const auto channel = input[1];
     const auto argument = wire::read_u32(input.data() + 2),
                secondary = wire::read_u32(input.data() + 6);
@@ -1231,6 +1273,16 @@ public:
     const auto &state = h.controller->state();
     using enum maintenance::Operation;
     switch (operation) {
+    case deployment_info:
+      output[0] = 1; // Schema version. Wire response prepends the existing Error byte.
+      output[1] = static_cast<std::uint8_t>(h.config.mode);
+      output[2] = static_cast<std::uint8_t>(h.config.hardware_profile);
+      output[3] = h.config.commissioned;
+      output[4] = h.config.valid();
+      output[5] = h.config.channels;
+      output[6] = h.config.max_active;
+      size = 7;
+      return Error::ok;
     case board_info:
       output[0] = h.application && h.application->state().reset_latched;
       output[1] = state.armed;
@@ -1260,7 +1312,7 @@ public:
     case wheel_ticks:
     case wheel_path:
     case reset_wheel_ticks: {
-      if (!h.startup_ready || !h.config.valid()) {
+      if (!h.startup_ready || (!h.diagnostic() && !h.config.valid())) {
         return Error::invalid_config;
       }
       if (operation == reset_wheel_ticks) {
@@ -1308,8 +1360,9 @@ public:
       return error == Error::ok ? h.chassis->reset_pose({values[0], values[1], values[2]}) : error;
     }
     case servo_probe: {
-      // Discovery is read-only and deliberately independent of commissioning/allowlists.
-      // A free bus is required; probing must never delay an active owner's commands.
+      // Discovery is read-only and deliberately independent of
+      // commissioning/allowlists. A free bus is required; probing must never
+      // delay an active owner's commands.
       if (channel == 0 || channel >= 254 || argument != 0 || secondary != 0 ||
           values != std::array<float, 3>{}) {
         return Error::invalid_argument;
@@ -1524,7 +1577,7 @@ public:
       return set_battery_id(h.battery_protocol, h.config.battery_id,
                             static_cast<std::uint8_t>(argument));
     case battery_value: {
-      if (!h.config.battery_enabled) {
+      if (!h.config.battery_enabled && !h.diagnostic()) {
         return Error::invalid_config;
       }
       Error error = Error::invalid_argument;
@@ -1565,10 +1618,10 @@ public:
         return h.motors[argument].ping();
       }
       if (channel == 1 && argument > 0 && argument < 254 &&
-          (h.config.ax_ids[argument] || h.config.mx_ids[argument])) {
+          (h.diagnostic() || h.config.ax_ids[argument] || h.config.mx_ids[argument])) {
         return h.servo_protocol.ping(static_cast<std::uint8_t>(argument));
       }
-      if (channel == 2 && h.config.battery_enabled) {
+      if (channel == 2 && (h.config.battery_enabled || h.diagnostic())) {
         return h.battery_protocol.ping(h.config.battery_id);
       }
       return Error::invalid_config;
@@ -1689,7 +1742,11 @@ public:
           output[size++] = static_cast<std::uint8_t>(digits[--count]);
         }
       };
-      append("armed=");
+      append("fw=0.1.0 mode=");
+      append(h.diagnostic() ? "DIAGNOSTIC" : "OPERATIONAL");
+      append(" profile=");
+      number(static_cast<std::uint8_t>(h.config.hardware_profile));
+      append(" armed=");
       number(state.armed);
       append(" estop=");
       number(state.estop);
@@ -1813,7 +1870,8 @@ void control_task(void *pointer) {
     if (board::receive_overflow() || comms_fault.exchange(false) || board::stepper_failed()) {
       (void)controller.fail(Error::output_failure);
     }
-    // Expire the previous commands before a job may renew them after a delayed control tick.
+    // Expire the previous commands before a job may renew them after a delayed
+    // control tick.
     (void)controller.tick(now);
     if (hardware.aux_expired(now)) {
       (void)controller.fail(Error::timeout);
@@ -1907,13 +1965,17 @@ void watchdog_task(void *) {
 #else
   static const Deployment config{};
 #endif
-  // Long-lived configuration, device objects and task stacks are in BSS, never the startup MSP.
+  // Long-lived configuration, device objects and task stacks are in BSS, never
+  // the startup MSP.
   static Hardware hardware{config};
   static PumpBank pumps{{config.channels, config.max_active, 250, config.max_pump_on_ms},
                         {&hardware, Hardware::write_outputs}};
   static Chassis chassis{config.chassis, {&hardware, Hardware::write_wheels}};
   hardware.chassis = &chassis;
-  static Controller controller{pumps, chassis, {&hardware, Hardware::stop_hook}};
+  static Controller controller{pumps,
+                               chassis,
+                               {&hardware, Hardware::stop_hook},
+                               config.mode != board::DeploymentMode::OPERATIONAL_MODE};
   hardware.controller = &controller;
   hardware.pumps = &pumps;
   static gripper::Engine grippers{config.grippers,

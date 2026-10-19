@@ -71,6 +71,38 @@
       "cacheVariables": {
         "EUROBOT_BOARD_CONFIG": "${sourceDir}/examples/robot_2026.hpp"
       }
+    },
+    {
+      "name": "stm32-robot2025-debug",
+      "inherits": "stm32-debug",
+      "binaryDir": "${sourceDir}/build/stm32-robot2025-debug",
+      "cacheVariables": {
+        "EUROBOT_BOARD_CONFIG": "${sourceDir}/examples/robot_2025.hpp"
+      }
+    },
+    {
+      "name": "stm32-robot2025",
+      "inherits": "stm32-release",
+      "binaryDir": "${sourceDir}/build/stm32-robot2025",
+      "cacheVariables": {
+        "EUROBOT_BOARD_CONFIG": "${sourceDir}/examples/robot_2025.hpp"
+      }
+    },
+    {
+      "name": "stm32-diagnostic-debug",
+      "inherits": "stm32-debug",
+      "binaryDir": "${sourceDir}/build/stm32-diagnostic-debug",
+      "cacheVariables": {
+        "EUROBOT_BOARD_CONFIG": "${sourceDir}/examples/diagnostic.hpp"
+      }
+    },
+    {
+      "name": "stm32-diagnostic",
+      "inherits": "stm32-release",
+      "binaryDir": "${sourceDir}/build/stm32-diagnostic",
+      "cacheVariables": {
+        "EUROBOT_BOARD_CONFIG": "${sourceDir}/examples/diagnostic.hpp"
+      }
     }
   ],
   "buildPresets": [
@@ -105,6 +137,22 @@
     {
       "name": "stm32-robot2026",
       "configurePreset": "stm32-robot2026"
+    },
+    {
+      "name": "stm32-robot2025-debug",
+      "configurePreset": "stm32-robot2025-debug"
+    },
+    {
+      "name": "stm32-robot2025",
+      "configurePreset": "stm32-robot2025"
+    },
+    {
+      "name": "stm32-diagnostic-debug",
+      "configurePreset": "stm32-diagnostic-debug"
+    },
+    {
+      "name": "stm32-diagnostic",
+      "configurePreset": "stm32-diagnostic"
     }
   ],
   "testPresets": [

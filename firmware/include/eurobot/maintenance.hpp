@@ -38,12 +38,14 @@ enum class Operation : std::uint8_t {
   pca_allpulse = 33,
   stepper_parameter = 34,
   stepper_set_parameter = 35,
-  servo_probe = 36
+  servo_probe = 36,
+  deployment_info = 37
 };
 enum class Access : std::uint8_t { unsupported, read_only, disarmed, armed, owned };
 constexpr Access access(std::uint8_t operation) noexcept {
   switch (static_cast<Operation>(operation)) {
   case Operation::board_info:
+  case Operation::deployment_info:
   case Operation::wheel_ticks:
   case Operation::wheel_path:
   case Operation::servo_feedback:

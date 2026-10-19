@@ -459,6 +459,12 @@ void dispatcher() {
   ++request.sequence;
   response = dispatcher.dispatch(request, 4);
   CHECK(response.payload[0] == static_cast<unsigned>(Error::unsupported));
+  // Unknown byte opcodes must be rejected without casting into a known enum.
+  for (const auto unknown : {0U, 10U, 31U, 37U, 127U, 255U}) {
+    request.type = static_cast<std::uint8_t>(unknown);
+    request.length = 0;
+    CHECK(dispatcher.dispatch(request, 4).payload[0] == static_cast<unsigned>(Error::unsupported));
+  }
   request.type = 6;
   request.owner = 999;
   request.sequence = 0;

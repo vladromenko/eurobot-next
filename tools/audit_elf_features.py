@@ -22,7 +22,7 @@ groups = {
 }
 report = {}
 failed = False
-for preset in ('stm32-debug', 'stm32-release', 'stm32-board8-plan', 'stm32-robot2026'):
+for preset in ('stm32-debug', 'stm32-release', 'stm32-board8-plan', 'stm32-robot2026', 'stm32-robot2025-debug', 'stm32-robot2025', 'stm32-diagnostic-debug', 'stm32-diagnostic'):
     directory = root / 'build' / preset
     cache = (directory / 'CMakeCache.txt').read_text()
     match = re.search(r'^CMAKE_NM:FILEPATH=(.+)$', cache, re.M)

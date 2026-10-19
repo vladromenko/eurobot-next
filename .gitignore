@@ -13,3 +13,8 @@ compile_commands.json
 artifacts/
 
 config/*_local.hpp
+
+RELEASE_PACKAGE/
+EUROBOT_NEXT_COMPLETE.zip
+EUROBOT_NEXT.bin
+EUROBOT_NEXT.manifest.json

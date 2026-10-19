@@ -155,6 +155,15 @@ int main() {
               decode_maintenance_reply(34, stepper_parameter, 0, 1) &&
               !decode_maintenance_reply(34, stepper_status, 0, 1),
           "stepper status is uint16 and named get-parameter response is uint32");
+    const std::array<std::uint8_t, 8> deployment_info{0, 1, 0, 1, 0, 0, 4, 0};
+    MaintenanceRequest info_request{37, 0, 0, 0, {}};
+    check(maintenance_read_only(37) && valid_maintenance_request(info_request) &&
+              decode_maintenance_reply(37, deployment_info),
+          "diagnostic deployment is read only");
+    info_request.channel = 1;
+    check(!valid_maintenance_request(info_request) &&
+              !decode_maintenance_reply(37, std::span(deployment_info).first(7)),
+          "deployment query rejects extra fields/truncation");
     MaintenanceRequest probe{36, 98, 0, 0, {}};
     check(maintenance_read_only(36) && valid_maintenance_request(probe),
           "servo discovery is read-only without control token");

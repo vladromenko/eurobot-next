@@ -160,6 +160,15 @@ class WireTests(unittest.TestCase):
             with self.subTest(payload=malformed.hex()), self.assertRaises(board.ProtocolError):
                 board.parse_job(malformed)
 
+    def test_deployment_info_is_strict_read_only_and_distinguishes_modes(self):
+        value = board.parse_maintenance(37, 0, 0, bytes((0, 1, 0, 1, 0, 0, 4, 0)))
+        self.assertEqual(value['mode'], 'diagnostic')
+        self.assertEqual(value['profile'], 'ROBOT_2025_HARDWARE_PROFILE')
+        self.assertFalse(value['commissioned'])
+        self.assertIn(37, board.READ_ONLY_MAINTENANCE)
+        for bad in (bytes((0, 2, 0, 1, 0, 0, 4, 0)), bytes((0, 1, 2, 1, 0, 0, 4, 0)), bytes((0, 1, 0, 1, 0, 0, 4, 5)), b'\x00', bytes(9)):
+            with self.assertRaises(board.ProtocolError): board.parse_maintenance(37, 0, 0, bad)
+
     def test_cli_gates_before_port_open(self):
         for flags in (("--exercise", "gripper"), ("--allow-motion",), ("--value", "nan"),
                       ("--exercise", "output", "--allow-motion"), ("--values", "2", "--select", "1")):

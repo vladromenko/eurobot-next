@@ -84,6 +84,14 @@ class FlashToolTest(unittest.TestCase):
   self.metadata['deployment_source']=str(self.path/'missing.hpp')
   self.metadata['deployment_sha256']='0'*64;self.save_manifest()
   result=self.permitted();self.assertNotEqual(result.returncode,0);self.assertEqual(self.calls(),[])
+ def test_relocated_profile_is_checked_by_pinned_relative_path(self):
+  profile=TOOL.parent.parent/'examples/deployment.hpp'
+  self.metadata.update(deployment_source='/unavailable/original/deployment.hpp',deployment_relative='examples/deployment.hpp',deployment_sha256=hashlib.sha256(profile.read_bytes()).hexdigest());self.save_manifest()
+  result=self.invoke('verify');self.assertEqual(result.returncode,0,result.stderr);self.assertEqual(self.calls(),[])
+ def test_relative_profile_cannot_escape_project(self):
+  for relative in ('../outside.hpp','/absolute/profile.hpp'):
+   self.metadata.update(deployment_relative=relative,deployment_sha256='0'*64);self.save_manifest()
+   self.assertNotEqual(self.permitted().returncode,0);self.assertEqual(self.calls(),[])
  def test_bootloader_confirmation_required_before_usb(self):
   result=self.invoke(extra=('--allow-flash',));self.assertNotEqual(result.returncode,0);self.assertEqual(self.calls(),[])
  def test_bad_digest_blocks_before_usb(self):

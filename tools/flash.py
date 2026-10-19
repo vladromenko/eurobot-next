@@ -79,6 +79,14 @@ def check_source_revision(manifest: Path):
         raise Failure("Image is from an older or unknown source revision. Build the current firmware first; do not reuse historical BIN/HEX files")
     selected = metadata.get("deployment_source")
     expected = metadata.get("deployment_sha256")
+    relative = metadata.get("deployment_relative")
+    if relative is not None:
+        if not isinstance(relative, str) or Path(relative).is_absolute():
+            raise Failure("Deployment relative path must stay within the source package")
+        candidate = (ROOT / relative).resolve()
+        if not candidate.is_relative_to(ROOT.resolve()):
+            raise Failure("Deployment relative path escapes the source package")
+        selected = str(candidate)
     if selected is not None:
         try:
             actual = hashlib.sha256(Path(selected).read_bytes()).hexdigest()

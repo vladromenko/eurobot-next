@@ -16,6 +16,11 @@ profile = image.parent / "generated/deployment.hpp"
 manifest["deployment_sha256"] = hashlib.sha256(profile.read_bytes()).hexdigest() if profile.is_file() else None
 manifest["deployment_source"] = str(Path(args.deployment_source).resolve()) if args.deployment_source else None
 if args.deployment_source:
+    local_profile = Path(args.deployment_source).resolve()
+    project_root = Path(__file__).resolve().parents[1]
+    if local_profile.is_relative_to(project_root):
+        manifest["deployment_relative"] = local_profile.relative_to(project_root).as_posix()
+if args.deployment_source:
     selected=Path(args.deployment_source)
     if not selected.is_file() or hashlib.sha256(selected.read_bytes()).hexdigest() != manifest["deployment_sha256"]:
         raise SystemExit('Deployment source differs from the configured header; configure and build again')

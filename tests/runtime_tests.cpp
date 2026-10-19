@@ -1,11 +1,14 @@
 #include "../firmware/src/runtime.cpp"
+#include "eurobot/robot_2025.hpp"
 #include <algorithm>
 #include <array>
 #include <cstdio>
 #include <cstdlib>
+#include <string_view>
 namespace fake {
 std::uint32_t micros{}, shift{}, inputs{};
-unsigned spi_calls{}, pulses{}, shift_calls{}, led_calls{};
+unsigned spi_calls{}, pulses{}, shift_calls{}, led_calls{}, serial_calls{}, serial_writes{};
+std::uint16_t pulldowns{};
 std::array<std::uint8_t, 8> last_spi{};
 std::array<std::array<std::uint8_t, 8>, 128> spi_trace{};
 std::array<std::int32_t, 3> measured{}, ticks{100, 200, 300};
@@ -20,6 +23,8 @@ unsigned probe_calls{}, probe_fail_at{}, probe_writes{};
 std::uint8_t probe_actual_id{98}, probe_torque{1}, probe_return_level{2};
 Error serial(void *, std::span<const std::uint8_t> tx, std::span<std::uint8_t> rx,
              std::size_t &received, std::uint32_t) {
+  ++serial_calls;
+  serial_writes += tx.size() > 4 && tx[4] != 2 && tx[4] != 1;
   received = 0;
   if (primary_trace) {
     if (primary_packet_count < primary_packets.size()) {
@@ -156,6 +161,10 @@ devices::StepPulseSink stepper_pulses(std::size_t) noexcept {
 Error pwm_pulse(std::uint8_t, std::uint16_t) noexcept { return Error::ok; }
 Error pwm_disable(std::uint8_t) noexcept { return Error::ok; }
 Error dc_drive(std::uint8_t, float, DcMode, std::uint32_t) noexcept { return Error::ok; }
+Error set_input_pulldowns(std::uint16_t mask) noexcept {
+  fake::pulldowns = mask;
+  return (mask & ~0x1fffU) == 0 ? Error::ok : Error::invalid_argument;
+}
 bool input(std::uint8_t i) noexcept { return (fake::inputs & (1U << i)) != 0; }
 void stepper_service(void *, Error (*)(void *, std::uint32_t)) noexcept {}
 void stepper_irq(bool enabled) noexcept { fake::irq_enabled = enabled; }
@@ -179,6 +188,7 @@ unsigned checks = 0;
   } while (false)
 Deployment deployment() {
   Deployment value{};
+  value.mode = board::DeploymentMode::OPERATIONAL_MODE;
   value.commissioned = true;
   value.max_active = 8;
   value.valve_outputs = {};
@@ -317,15 +327,137 @@ void source_primary_runtime_wire() {
     fake::primary_trace = fake::primary_feedback_timeout = false;
   }
 }
+void diagnostic_runtime() {
+  auto config = board::robot_2025();
+  // Also test a fully commissioned configuration with every external backend
+  // selected: mode inhibition, rather than missing configuration, must protect
+  // it.
+  for (unsigned variant = 0; variant < 2; ++variant) {
+    if (variant == 1) {
+      config = deployment();
+      config.mode = board::DeploymentMode::DIAGNOSTIC_MODE;
+      config.pca_enabled = true;
+      config.ax_ids[103] = true;
+      config.servo_max_deg[103] = 300;
+      CHECK(config.valid());
+    }
+    Hardware hardware{config};
+    PumpBank pumps{{config.channels, config.max_active, 250, 0},
+                   {&hardware, Hardware::write_outputs}};
+    Chassis chassis{config.chassis, {&hardware, Hardware::write_wheels}};
+    Controller controller{pumps, chassis, {&hardware, Hardware::stop_hook}, true};
+    hardware.controller = &controller;
+    hardware.chassis = &chassis;
+    hardware.pumps = &pumps;
+    application::Application app{config.application,
+                                 {&hardware, Hardware::application_guard,
+                                  Hardware::application_stop, Hardware::application_action}};
+    hardware.application = &app;
+    gripper::Engine engine{config.grippers,
+                           {&hardware, Hardware::job_guard, Hardware::job_validate,
+                            Hardware::job_issue, Hardware::job_feedback, Hardware::job_stop}};
+    hardware.gripper_engine = &engine;
+    wire::Dispatcher dispatcher{controller,
+                                {&hardware, Hardware::actuator, Hardware::sensor_read,
+                                 Hardware::job_request, Hardware::command_guard}};
+    const auto serial_before = fake::serial_calls, spi_before = fake::spi_calls;
+    const auto pulses_before = fake::pulses;
+    fake::bus_fail = true; // No connected external device must not brick diagnostics.
+    CHECK(hardware.initialize() == Error::ok);
+    CHECK(fake::pulldowns == config.input_pulldown_mask);
+    CHECK(controller.initialize(0) == Error::ok);
+    CHECK(!controller.state().fault && !controller.state().armed);
+    CHECK(app.initialize(0) == Error::ok);
+    CHECK(controller.claim(77, 1, 1000, 0) == Error::ok);
+    CHECK(controller.rearm(77, 2, 0) == Error::not_armed);
+    CHECK(!controller.state().armed);
+    CHECK(Hardware::write_outputs(&hardware, 1, 1) == Error::not_armed);
+    CHECK(Hardware::write_wheels(&hardware, {1, 0, 0}) == Error::not_armed);
+    CHECK(actuate(hardware, 1, 103, 1, 1) == Error::not_armed);
+    CHECK(Hardware::application_action(&hardware, application::LocalAction::enable_motors, 0) ==
+          Error::not_armed);
+    gripper::Step step{};
+    step.action = gripper::Action::servo_group;
+    CHECK(Hardware::job_issue(&hardware, step, 0) == Error::not_armed);
+    CHECK(Hardware::step_tick(&hardware, 10) == Error::ok);
+    wire::Frame frame{};
+    frame.owner = 77;
+    frame.sequence = 3;
+    for (const auto type :
+         {wire::Type::rearm, wire::Type::twist, wire::Type::pumps, wire::Type::actuator}) {
+      frame.type = static_cast<std::uint8_t>(type);
+      auto reply = dispatcher.dispatch(frame, 0);
+      CHECK(reply.payload[0] == static_cast<std::uint8_t>(Error::not_armed));
+    }
+    frame.type = 0x24;
+    frame.length = 22;
+    for (unsigned operation = 0; operation <= 37; ++operation) {
+      if (maintenance::access(static_cast<std::uint8_t>(operation)) !=
+          maintenance::Access::read_only) {
+        frame.payload[0] = static_cast<std::uint8_t>(operation);
+        ++frame.sequence;
+        const auto reply = dispatcher.dispatch(frame, 0);
+        CHECK(reply.payload[0] == static_cast<std::uint8_t>(Error::not_armed));
+      }
+    }
+    frame.payload[0] = static_cast<std::uint8_t>(maintenance::Operation::deployment_info);
+    auto reply = dispatcher.dispatch(frame, 0);
+    CHECK(reply.length == 8 && reply.payload[0] == 0 && reply.payload[1] == 1);
+    CHECK(reply.payload[2] == 0 &&
+          reply.payload[3] == static_cast<std::uint8_t>(config.hardware_profile));
+    CHECK(reply.payload[4] == config.commissioned && reply.payload[5] == config.valid());
+    CHECK(reply.payload[6] == config.channels && reply.payload[7] == config.max_active);
+    frame.payload[0] = static_cast<std::uint8_t>(maintenance::Operation::board_info);
+    reply = dispatcher.dispatch(frame, 0);
+    CHECK(reply.length == 17 && reply.payload[0] == 0 && reply.payload[2] == 0 &&
+          reply.payload[4] == 0);
+    frame.payload[0] = static_cast<std::uint8_t>(maintenance::Operation::diagnostic_text);
+    reply = dispatcher.dispatch(frame, 0);
+    CHECK(reply.payload[0] == 0);
+    CHECK(
+        std::string_view(reinterpret_cast<const char *>(reply.payload.data() + 1), reply.length - 1)
+            .find("DIAGNOSTIC") != std::string_view::npos);
+    frame.type = static_cast<std::uint8_t>(wire::Type::sensors);
+    frame.length = 0;
+    reply = dispatcher.dispatch(frame, 0);
+    CHECK(reply.length == 25 && reply.payload[0] == 0 && reply.payload[1] == 0);
+    CHECK(controller.emergency_stop() == Error::ok);
+    CHECK(controller.tick(2000) == Error::lease_expired);
+    CHECK(hardware.stop() == Error::ok && fake::shift == 0);
+    CHECK(fake::serial_calls == serial_before && fake::spi_calls == spi_before);
+    CHECK(fake::pulses == pulses_before);
+    CHECK(!chassis.state().commanded_known && chassis.state().measured_known == 0);
+    CHECK(pumps.state().commanded_known == 0);
+    fake::bus_fail = false;
+    // Explicit bounded read-only discovery remains available after releasing
+    // ownership.
+    frame = {};
+    frame.type = 0x24;
+    frame.length = 22;
+    frame.payload[0] = static_cast<std::uint8_t>(maintenance::Operation::device_ping);
+    frame.payload[1] = 0;
+    const auto writes_before = fake::serial_writes;
+    // Fake PING parser is intentionally not used; a disconnected bus returns
+    // timeout.
+    fake::bus_fail = true;
+    reply = dispatcher.dispatch(frame, 2001);
+    CHECK(reply.payload[0] == static_cast<std::uint8_t>(Error::timeout));
+    CHECK(fake::serial_calls > serial_before && fake::serial_writes == writes_before);
+    fake::bus_fail = false;
+  }
+}
 int main() {
+  diagnostic_runtime();
   source_primary_runtime_wire();
   Deployment invalid{};
+  invalid.mode = board::DeploymentMode::OPERATIONAL_MODE;
   Hardware uncommissioned{invalid};
   CHECK(uncommissioned.initialize() == Error::invalid_config);
   CHECK(Hardware::write_outputs(&uncommissioned, 0, 0) == Error::invalid_config);
   CHECK(fake::shift == 0);
   CHECK(actuate(uncommissioned, 6, 0, 0.5, 0) == Error::invalid_config);
-  // Uncommissioned startup can discover one servo, without any output writes or allowlist.
+  // Uncommissioned startup can discover one servo, without any output writes or
+  // allowlist.
   PumpBank probe_pumps{{8, 0, 250, 0}, {&uncommissioned, Hardware::write_outputs}};
   Chassis probe_chassis{invalid.chassis, {&uncommissioned, Hardware::write_wheels}};
   Controller probe_controller{probe_pumps, probe_chassis, {&uncommissioned, Hardware::stop_hook}};
@@ -459,7 +591,8 @@ int main() {
   fake::bus_fail = false;
   CHECK(hw.stop() == Error::ok);
   CHECK(!hw.encoder_seeded && !chassis.state().pose_known && chassis.state().measured_known == 0);
-  // Synthetic integration profile: zero-position servo feedback is supplied by fake::serial.
+  // Synthetic integration profile: zero-position servo feedback is supplied by
+  // fake::serial.
   auto job_config = deployment();
   job_config.grippers[0] = gripper::legacy_2026_reference(1);
   job_config.grippers[0].reviewed = true;

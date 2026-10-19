@@ -358,8 +358,8 @@ Error initialize() noexcept {
   return Error::ok;
 }
 std::uint32_t micros() noexcept { return TIM2->CNT; }
-std::uint32_t
-millis() noexcept { // Expand the 71-minute hardware wrap into a wrap-safe millisecond clock.
+std::uint32_t millis() noexcept { // Expand the 71-minute hardware wrap into a
+                                  // wrap-safe millisecond clock.
   auto primask = __get_PRIMASK();
   __disable_irq();
   static std::uint32_t previous = 0, total_ms = 0, remainder = 0;
@@ -585,6 +585,18 @@ Error dc_brake(std::uint8_t channel, bool high, std::uint32_t frequency) noexcep
   return second;
 }
 
+Error set_input_pulldowns(std::uint16_t mask) noexcept {
+  if ((mask & ~0x1fffU) != 0)
+    return Error::invalid_argument;
+  for (std::size_t index = 0; index < connector::inputs.size(); ++index) {
+    const auto pin = connector::inputs[index];
+    auto *port = gpio_port(pin.port);
+    const auto shift = pin.bit * 2U;
+    port->PUPDR =
+        (port->PUPDR & ~(3U << shift)) | (((mask & (1U << index)) != 0 ? 2U : 0U) << shift);
+  }
+  return Error::ok;
+}
 bool input(std::uint8_t index) noexcept {
   if (index >= connector::inputs.size())
     return false;

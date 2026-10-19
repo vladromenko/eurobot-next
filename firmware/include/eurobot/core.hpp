@@ -29,8 +29,9 @@ constexpr std::uint32_t channel_mask(std::uint8_t count) noexcept {
 constexpr bool elapsed(std::uint32_t now, std::uint32_t then, std::uint32_t interval) noexcept {
   return static_cast<std::uint32_t>(now - then) >= interval;
 }
-// All mutable core objects belong to ONE control task. ISR/ROS producers must enqueue commands.
-// Callback success means accepted by the output driver; it never implies physical actuation.
+// All mutable core objects belong to ONE control task. ISR/ROS producers must
+// enqueue commands. Callback success means accepted by the output driver; it
+// never implies physical actuation.
 struct OutputSink {
   void *context{};
   Error (*write)(void *, std::uint32_t pumps, std::uint32_t valves){};
@@ -109,9 +110,11 @@ struct WheelSink {
 struct ChassisConfig {
   OmniConfig geometry{legacy_2026_geometry()};
   float max_linear_mps{}, max_angular_radps{}, max_accel_mps2{}, max_angular_accel_radps2{};
-  std::int32_t max_wheel_tpm{}; // Required deployment configuration; no guessed motor limit.
+  std::int32_t max_wheel_tpm{}; // Required deployment configuration; no guessed
+                                // motor limit.
   std::uint32_t command_timeout_ms{250}, max_tick_ms{100};
-  std::int32_t max_encoder_delta{}; // Required before accepting measured encoder increments.
+  std::int32_t max_encoder_delta{}; // Required before accepting measured
+                                    // encoder increments.
 };
 struct ChassisState {
   Twist requested{}, commanded{}, measured{};
@@ -179,8 +182,9 @@ struct ControllerState {
 };
 class Controller {
 public:
-  Controller(PumpBank &pumps, Chassis &chassis, StopSink auxiliary = {}) noexcept
-      : pumps_(pumps), chassis_(chassis), auxiliary_(auxiliary) {}
+  Controller(PumpBank &pumps, Chassis &chassis, StopSink auxiliary = {},
+             bool arm_inhibited = false) noexcept
+      : pumps_(pumps), chassis_(chassis), auxiliary_(auxiliary), arm_inhibited_(arm_inhibited) {}
   [[nodiscard]] Error initialize(std::uint32_t now) noexcept;
   [[nodiscard]] Error claim(std::uint32_t owner, std::uint32_t sequence, std::uint32_t lease_ms,
                             std::uint32_t now) noexcept;
@@ -202,7 +206,8 @@ public:
   [[nodiscard]] PumpBank &pump_bank() noexcept { return pumps_; }
   [[nodiscard]] Chassis &chassis() noexcept { return chassis_; }
   [[nodiscard]] bool lease_active(std::uint32_t now) const noexcept;
-  // Extension commands must pass this same owner/sequence/armed gate, never a parallel API.
+  // Extension commands must pass this same owner/sequence/armed gate, never a
+  // parallel API.
   [[nodiscard]] Error authorize(std::uint32_t owner, std::uint32_t sequence, std::uint32_t now,
                                 bool require_armed = true) noexcept;
   [[nodiscard]] Error fail(Error error) noexcept;
@@ -213,6 +218,9 @@ private:
   StopSink auxiliary_;
   ControllerState state_{};
   std::uint32_t last_sequence_{}, lease_duration_{}, lease_renewed_{}, last_owner_{};
+  // Immutable for this controller lifetime; diagnostic firmware cannot switch
+  // to motion over UART.
+  const bool arm_inhibited_{};
   bool initialized_{}, physical_estop_{};
   [[nodiscard]] Error stop_all() noexcept;
 };

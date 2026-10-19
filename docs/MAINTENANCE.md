@@ -162,3 +162,9 @@ ACK type0xA4 совпадает по owner/sequence. Byte0 — Error; при о�
 Командный register32 скорости AX/MX отличается от present-speed register38. Settled, referenced и measured также не взаимозаменяемы. Ни прочитанный software step counter, ни SPI ACK не подтверждают положение предмета или вакуум. Все аппаратные известности сохраняются отдельно.
 
 Ошибки I/O после записывающей операции (timeout/output_failure/ошибка ответа) переводят Controller в fault и вызывают общий stop: частичная запись PCA не остаётся включённой без command deadline. Ошибка чтения или отказ валидации/authority этого не делает. При изменении Maxon ID занятость проверяется по текущим адресам всех трёх объектов, включая уже переименованные в этой сессии; повторное назначение одного нового ID двум колёсам отвергается. Изменённые постоянные адреса всё равно должны быть перенесены в deployment до следующей загрузки.
+
+##37 deployment_info: чтение режима и профиля
+
+Номер37 — read-only запрос без дополнительных полей (channel/argument/secondary/values нулевые). Ответ после общего errorbyte:7байт `schema_version=1, mode, hardware_profile, commissioned, valid, channels, max_active`. Mode0 — DIAGNOSTIC_MODE,1 — OPERATIONAL_MODE; profile0 — CUSTOM,1 — ROBOT_2025_HARDWARE_PROFILE,2 — ROBOT_2026_SOURCE_PROFILE. Genericпервыйобраз сообщает0/0/false/false; `valid=false` означает отсутствующий операционный допуск, а не потерю UART. Режим этим запросом не изменяется. Macкоманда: `python3 tools/board_test.py --port "$EUROBOT_PORT" --maintenance deployment_info`; ROSконстанта DEPLOYMENT_INFO=37.
+
+В диагностическом режиме все изменяющие maintenance отвергаются. Доступные чтения внешних устройств происходят только по явному запросу, а не автоматически при boot/таймере; unconfigured stepper не подготавливается ради чтения.

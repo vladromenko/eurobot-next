@@ -196,16 +196,20 @@ bool maintenance_read_only(std::uint8_t operation) noexcept {
   case 31:
   case 34:
   case 36:
+  case 37:
     return true;
   default:
     return false;
   }
 }
 bool valid_maintenance_request(const MaintenanceRequest &request) noexcept {
-  if (request.operation > 36 || !std::all_of(request.values.begin(), request.values.end(),
+  if (request.operation > 37 || !std::all_of(request.values.begin(), request.values.end(),
                                              [](float value) { return std::isfinite(value); }))
     return false;
   switch (request.operation) {
+  case 37:
+    return request.channel == 0 && request.argument == 0 && request.secondary == 0 &&
+           request.values == std::array<float, 3>{};
   case 36:
     return request.channel > 0 && request.channel < 254 && request.argument == 0 &&
            request.secondary == 0 && request.values == std::array<float, 3>{};
@@ -253,7 +257,7 @@ std::optional<MaintenanceReply> decode_maintenance_reply(std::uint8_t operation,
                                                          std::span<const std::uint8_t> payload,
                                                          std::uint8_t channel,
                                                          std::uint32_t argument) noexcept {
-  if (operation > 36 || payload.empty() || payload.size() > 128 || payload[0] > 12)
+  if (operation > 37 || payload.empty() || payload.size() > 128 || payload[0] > 12)
     return {};
   MaintenanceReply reply{};
   reply.error = payload[0];
@@ -292,6 +296,10 @@ std::optional<MaintenanceReply> decode_maintenance_reply(std::uint8_t operation,
         channel <= 5 &&
         size ==
             (channel == 0 ? 5U : (channel == 1 ? 9U : ((channel == 2 || channel == 3) ? 3U : 2U)));
+    break;
+  case 37:
+    valid = size == 7 && payload[1] == 1 && payload[2] <= 1 && payload[3] <= 2 && payload[4] <= 1 &&
+            payload[5] <= 1 && payload[6] >= 1 && payload[6] <= 32 && payload[7] <= payload[6];
     break;
   case 36:
     valid = size == 12 && channel > 0 && channel < 254 && payload[4] == channel &&

@@ -212,8 +212,8 @@ MAINTENANCE = {"board_info": 0, "board_reset": 1, "clear_reset": 2, "wheel_ticks
                "match_disarm": 23, "application_mode": 24, "communication": 25,
                "wheel_holding": 26, "diagnostic_text": 27, "application_event": 28,
                "battery_id": 29, "battery_value": 30, "device_ping": 31, "pca_control": 32,
-               "pca_allpulse": 33, "stepper_parameter": 34, "stepper_set_parameter": 35, "servo_probe": 36}
-READ_ONLY_MAINTENANCE = frozenset((0, 3, 4, 7, 13, 17, 19, 21, 27, 28, 30, 31, 34, 36))
+               "pca_allpulse": 33, "stepper_parameter": 34, "stepper_set_parameter": 35, "servo_probe": 36, "deployment_info": 37}
+READ_ONLY_MAINTENANCE = frozenset((0, 3, 4, 7, 13, 17, 19, 21, 27, 28, 30, 31, 34, 36, 37))
 ARMED_MAINTENANCE = frozenset((22, 26, 33))
 L6474_REGISTERS = {0x01: 0x3fffff, 0x02: 0x1ff, 0x03: 0x3fffff, 0x09: 0x7f,
                     0x0e: 0xff, 0x0f: 0x7f, 0x10: 0x7f, 0x12: 0x3f, 0x13: 0xf,
@@ -229,7 +229,7 @@ def parse_maintenance(operation: int, channel: int, argument: int, payload: byte
             raise ProtocolError("Malformed maintenance NACK has unexpected body")
         raise ControllerError(error)
     body = payload[1:]
-    expected = {0: 16, 3: 13, 4: 13, 5: 13, 7: 12, 13: 8, 17: 8, 19: 8, 21: 24, 28: 9, 36: 12}
+    expected = {0: 16, 3: 13, 4: 13, 5: 13, 7: 12, 13: 8, 17: 8, 19: 8, 21: 24, 28: 9, 36: 12, 37: 7}
     if operation == 30:
         if not 0 <= channel <= 5:
             raise ProtocolError("Unsupported battery quantity")
@@ -273,6 +273,13 @@ def parse_maintenance(operation: int, channel: int, argument: int, payload: byte
                       present_load_raw=load if body[0] else None,
                       voltage_decivolts=body[9] if body[0] else None,
                       temperature_c=body[10] if body[0] else None, moving=bool(body[11]) if body[0] else None)
+    elif operation == 37:
+        version, mode, profile, commissioned, valid, channels, max_active = body
+        if version != 1 or mode > 1 or profile > 2 or commissioned > 1 or valid > 1 or not 1 <= channels <= 32 or max_active > channels:
+            raise ProtocolError("Invalid deployment information enums/limits")
+        result.update(schema_version=version, mode=("diagnostic", "operational")[mode],
+                      profile=("CUSTOM", "ROBOT_2025_HARDWARE_PROFILE", "ROBOT_2026_SOURCE_PROFILE")[profile],
+                      commissioned=bool(commissioned), valid=bool(valid), channels=channels, max_active=max_active)
     elif operation == 36:
         model, firmware, actual_id, cw, ccw, position, torque, return_level = struct.unpack("<HBBHHHBB", body)
         if not 1 <= channel <= 253 or actual_id != channel or torque > 1 or return_level > 2:
@@ -702,6 +709,8 @@ def arguments(argv=None):
             parser.error("Read-only/disarmed maintenance must not arm the controller")
         if op in (7, 8, 9, 10, 11, 12, 36) and not 1 <= args.channel <= 253:
             parser.error("Servo channel is an individual ID1…253; broadcast forbidden")
+        if op == 37 and (args.channel != 0 or args.arg != 0 or args.secondary != 0 or any(args.floats)):
+            parser.error("deployment_info accepts no extra fields")
         if op == 36 and (args.arg != 0 or args.secondary != 0 or any(args.floats)):
             parser.error("servo_probe accepts only--channel; extra values must be zero")
         if op in (13, 14, 15) and args.channel >= 3:
